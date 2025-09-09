@@ -1,0 +1,16 @@
+name: Simple Smart stable9 Version
+type: theme
+description: "A sleek & practical theme for curious minds."
+core_version_requirement: ^9 || ^10 || ^11
+base theme: stable9
+screenshot: simplesmartscreenshot.png
+regions:
+  header: Header
+  simplesmartmenu: Navigation
+  content: Content
+  footer: Footer
+  page_top: Page top
+  page_bottom: Page bottom
+libraries:
+  - simplesmart/global-css
+  - simplesmart/menlo

@@ -1,0 +1,12 @@
+global-css:
+  version: 1.0
+  css:
+    theme:
+      css/elements.css: {}
+      css/layout.css: {}
+      css/print.css: { media: print }
+menlo:
+  css:
+    theme:
+      //fonts.cdnfonts.com/css/menlo: { type: external }
+      css/styles.css: {}
