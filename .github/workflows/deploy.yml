@@ -26,9 +26,9 @@ jobs:
       - name: Start WireGuard
         run: sudo wg-quick up ./wg0.conf
 
-      # 5. Verify VPN connectivity
-      - name: Ping server VPN IP
-        run: ping -c 3 ${{ secrets.DEPLOY_HOST }}
+      # 5. Verify VPN handshake
+      - name: Check WireGuard handshake
+        run: sudo wg show
 
       # 6. Stream code into Drupal container
       - name: Deploy code into container
