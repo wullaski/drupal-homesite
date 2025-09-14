@@ -1,0 +1,52 @@
+name: Deploy Drupal Site via WireGuard
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout repository
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Install WireGuard
+      - name: Install WireGuard
+        run: sudo apt-get update && sudo apt-get install -y wireguard
+
+      # 3. Write WireGuard config from secret
+      - name: Setup WireGuard
+        run: echo "${{ secrets.WG_CONFIG }}" > wg0.conf
+
+      # 4. Bring up WireGuard interface
+      - name: Start WireGuard
+        run: sudo wg-quick up ./wg0.conf
+
+      # 5. Verify VPN connectivity
+      - name: Ping server VPN IP
+        run: ping -c 3 ${{ secrets.DEPLOY_HOST }}
+
+      # 6. Stream code into Drupal container
+      - name: Deploy code into container
+        run: |
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+            tar czf - ./ | docker exec -i homesite tar xzf - -C /var/www/html
+          EOF
+
+      # 7. Run Composer & Drush inside container
+      - name: Composer & Drush
+        run: |
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+            docker exec -T homesite composer install --no-dev --optimize-autoloader
+            docker exec -T homesite drush cim -y
+            docker exec -T homesite drush cr
+          EOF
+
+      # 8. Tear down WireGuard
+      - name: Teardown WireGuard
+        if: always()
+        run: sudo wg-quick down ./wg0.conf
