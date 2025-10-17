@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'web/**'
+      - 'drupal/**'
+      - 'composer.json'
+      - 'composer.lock'
+      - '.github/workflows/deploy-drupal.yml'
 
 jobs:
   deploy:
@@ -26,11 +32,13 @@ jobs:
         env:
           TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
         run: |
-          sudo tailscale up --authkey=${TAILSCALE_AUTHKEY} --hostname=github-runner --timeout=30s
-          tailscale status
+          sudo tailscale up --authkey=${TAILSCALE_AUTHKEY} --hostname=github-runner --timeout=30s || true
+          tailscale status || true
 
-      # 4. Debug SSH connection with retries
-      - name: Debug SSH connection
+      # 4. Test SSH connection
+      - name: Test SSH connection
+        id: sshcheck
+        continue-on-error: true
         env:
           SSH_PRIVATE_KEY: ${{ secrets.HOMELAB_SSH_KEY }}
           SSH_USER: ${{ secrets.HOMELAB_SSH_USER }}
@@ -43,60 +51,66 @@ jobs:
 
           echo "Testing SSH connectivity..."
           for i in {1..10}; do
-            ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa $SSH_USER@$SSH_HOST "echo Connected" && break
+            if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa $SSH_USER@$SSH_HOST "echo Connected"; then
+              echo "SSH_OK=true" >> $GITHUB_ENV
+              exit 0
+            fi
             echo "SSH not ready yet, retrying ($i/10)..."
             sleep 5
           done
 
-      # 5. Deploy Drupal site inside Docker container
-      - name: Deploy Drupal via SSH
-        if: success()
+          echo "SSH_OK=false" >> $GITHUB_ENV
+          echo "⚠️ Could not connect to SSH host."
+          exit 0
+
+      # 5. 🚀 Deploy Drupal (only if SSH connection works)
+      - name: 🚀 Deploy Drupal
+        if: env.SSH_OK == 'true'
         env:
           SSH_PRIVATE_KEY: ${{ secrets.HOMELAB_SSH_KEY }}
           SSH_USER: ${{ secrets.HOMELAB_SSH_USER }}
           SSH_HOST: ${{ secrets.HOMELAB_TAILSCALE_IP }}
         run: |
+          set -e
           mkdir -p ~/.ssh
           echo "${SSH_PRIVATE_KEY}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
 
-          echo "🚀 Deploying Drupal code..."
-          ssh -i ~/.ssh/id_rsa $SSH_USER@$SSH_HOST << 'EOF'
+          echo "--- Copying code to host ---"
+          rsync -avz --delete --exclude='.git' --exclude='node_modules' ./ $SSH_USER@$SSH_HOST:/var/www/html/
+
+          echo "--- Running deployment steps inside container ---"
+          ssh -i ~/.ssh/id_rsa $SSH_USER@$SSH_HOST << 'INCONTAINER'
             set -e
 
-            echo "--- Copying code into container ---"
-            tar czf - ./ | docker exec -i homesite tar xzf - -C /var/www/html
+            CONTAINER=$(docker ps --filter "name=homesite" --format "{{.ID}}" | head -n 1)
+            echo "Found Drupal container: $CONTAINER"
 
-            echo "--- Running deployment steps inside container ---"
-            docker exec -i -u root homesite bash -eux << 'INCONTAINER'
-              apt-get update -qq && apt-get install -y unzip apache2-utils
+            if [ -z "$CONTAINER" ]; then
+              echo "❌ No running Drupal container found!"
+              exit 1
+            fi
 
-              cd /var/www/html
+            docker exec $CONTAINER bash -c "
+              cd /opt/drupal
+              echo 'Running composer install...'
+              composer install --no-interaction --no-progress --optimize-autoloader
 
-              composer clear-cache
-              composer remove drupal/core-composer-scaffold || true
-              composer require drupal/core-composer-scaffold --update-with-dependencies --no-interaction --no-progress
-              composer install --no-interaction --prefer-dist --no-dev --no-progress
+              echo 'Allowing Drupal composer plugins...'
+              composer config --no-plugins allow-plugins.drupal/core-composer-scaffold true
 
-              # Fix ownership and permissions for Apache
-              chown -R www-data:www-data /var/www/html
-              find /var/www/html -type d -exec chmod 755 {} \;
-              find /var/www/html -type f -exec chmod 644 {} \;
-              chmod 644 /var/www/html/.htaccess || true
+              echo 'Running composer drupal:scaffold...'
+              composer drupal:scaffold || true
 
-              # Run Drush maintenance tasks
-              sudo -u www-data drush cim -y || true
-              sudo -u www-data drush updb -y || true
-              sudo -u www-data drush cr || true
+              echo 'Clearing Drupal cache...'
+              vendor/bin/drush cr || true
 
-              echo "--- Restarting Apache to apply changes ---"
-              service apache2 restart || docker restart homesite || true
+              echo '✅ Deployment inside container complete.'
+            "
+          INCONTAINER
 
-              echo "--- Checking permissions for debugging ---"
-              ls -ld /var/www /var/www/html /var/www/html/.htaccess || true
-              namei -l /var/www/html/.htaccess || true
-
-              echo "✅ Drupal deployment finished successfully."
-            INCONTAINER
-          EOF
+      # 6. Skip message if offline
+      - name: 💤 Homelab offline, skipping deploy
+        if: env.SSH_OK != 'true'
+        run: echo "Homelab unreachable, skipping deployment safely."
