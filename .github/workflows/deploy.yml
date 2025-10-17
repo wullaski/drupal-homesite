@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout code
+      # 1. Checkout repo
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -61,22 +61,23 @@ jobs:
           ssh -i ~/.ssh/id_rsa $SSH_USER@$SSH_HOST << 'EOF'
             set -e
 
-            # Stream latest code directly into the Drupal container
+            # Stream code into the container
             tar czf - ./ | docker exec -i homesite tar xzf - -C /var/www/html
 
-            # Run Composer and Drush inside the container
+            # Install Composer dependencies
             docker exec -i homesite composer clear-cache
             docker exec -i homesite composer install --no-interaction --prefer-dist --no-dev
             docker exec -i homesite composer require drupal/core-composer-scaffold --update-with-dependencies
-            docker exec -i homesite drush cim -y
-            docker exec -i homesite drush updb -y
-            docker exec -i homesite drush cr
 
-            # Fix ownership and permissions inside container
+            # Fix ownership and permissions for Apache
             docker exec -i homesite chown -R www-data:www-data /var/www/html
             docker exec -i homesite find /var/www/html -type d -exec chmod 755 {} \;
             docker exec -i homesite find /var/www/html -type f -exec chmod 644 {} \;
 
+            # Run Drush tasks
+            docker exec -i homesite drush cim -y
+            docker exec -i homesite drush updb -y
+            docker exec -i homesite drush cr
+
             echo "✅ Deployment complete."
           EOF
-  
