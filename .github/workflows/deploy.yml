@@ -64,20 +64,19 @@ jobs:
             # Stream code into the container
             tar czf - ./ | docker exec -i homesite tar xzf - -C /var/www/html
 
-            # Install Composer dependencies
-            docker exec -i homesite composer clear-cache
-            docker exec -i homesite composer install --no-interaction --prefer-dist --no-dev
-            docker exec -i homesite composer require drupal/core-composer-scaffold --update-with-dependencies
-
-            # Fix ownership and permissions for Apache
-            docker exec -i homesite chown -R www-data:www-data /var/www/html
-            docker exec -i homesite find /var/www/html -type d -exec chmod 755 {} \;
-            docker exec -i homesite find /var/www/html -type f -exec chmod 644 {} \;
+            docker exec -i homesite bash -c "
+              chown -R www-data:www-data /var/www/html
+              find /var/www/html -type d -exec chmod 755 {} \;
+              find /var/www/html -type f -exec chmod 644 {} \;
+              composer clear-cache
+              composer install --no-interaction --prefer-dist --no-dev
+              composer require drupal/core-composer-scaffold --update-with-dependencies
+            "
 
             # Run Drush tasks
-            docker exec -i homesite drush cim -y
-            docker exec -i homesite drush updb -y
-            docker exec -i homesite drush cr
+            docker exec -i -u www-data homesite drush cim -y
+            docker exec -i -u www-data homesite drush updb -y
+            docker exec -i -u www-data homesite drush cr
 
             echo "✅ Deployment complete."
           EOF
