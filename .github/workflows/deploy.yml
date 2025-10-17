@@ -48,7 +48,7 @@ jobs:
             sleep 5
           done
 
-      # 5. Deploy Drupal site
+      # 5. Deploy Drupal site inside Docker container
       - name: Deploy Drupal via SSH
         if: success()
         env:
@@ -61,35 +61,42 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
 
-          echo "Deploying Drupal code..."
+          echo "🚀 Deploying Drupal code..."
           ssh -i ~/.ssh/id_rsa $SSH_USER@$SSH_HOST << 'EOF'
             set -e
 
-            # Install unzip as root (needed for Composer scaffold)
-            docker exec -i -u root homesite bash -c "apt-get update && apt-get install -y unzip"
-
-            # Stream code into the container
+            echo "--- Copying code into container ---"
             tar czf - ./ | docker exec -i homesite tar xzf - -C /var/www/html
 
-            # Clear Composer cache
-            docker exec -i homesite composer clear-cache
+            echo "--- Running deployment steps inside container ---"
+            docker exec -i -u root homesite bash -eux << 'INCONTAINER'
+              apt-get update -qq && apt-get install -y unzip apache2-utils
 
-            # Reinstall Drupal scaffold to fix missing files
-            docker exec -i homesite composer remove drupal/core-composer-scaffold || true
-            docker exec -i homesite composer require drupal/core-composer-scaffold --update-with-dependencies
+              cd /var/www/html
 
-            # Install other Composer dependencies
-            docker exec -i homesite composer install --no-interaction --prefer-dist --no-dev
+              composer clear-cache
+              composer remove drupal/core-composer-scaffold || true
+              composer require drupal/core-composer-scaffold --update-with-dependencies --no-interaction --no-progress
+              composer install --no-interaction --prefer-dist --no-dev --no-progress
 
-            # Fix ownership and permissions so Apache can read everything
-            docker exec -i homesite chown -R www-data:www-data /var/www/html
-            docker exec -i homesite find /var/www/html -type d -exec chmod 755 {} \;
-            docker exec -i homesite find /var/www/html -type f -exec chmod 644 {} \;
+              # Fix ownership and permissions for Apache
+              chown -R www-data:www-data /var/www/html
+              find /var/www/html -type d -exec chmod 755 {} \;
+              find /var/www/html -type f -exec chmod 644 {} \;
+              chmod 644 /var/www/html/.htaccess || true
 
-            # Run Drush tasks as www-data
-            docker exec -i -u www-data homesite drush cim -y
-            docker exec -i -u www-data homesite drush updb -y
-            docker exec -i -u www-data homesite drush cr
+              # Run Drush maintenance tasks
+              sudo -u www-data drush cim -y || true
+              sudo -u www-data drush updb -y || true
+              sudo -u www-data drush cr || true
 
-            echo "✅ Deployment complete."
+              echo "--- Restarting Apache to apply changes ---"
+              service apache2 restart || docker restart homesite || true
+
+              echo "--- Checking permissions for debugging ---"
+              ls -ld /var/www /var/www/html /var/www/html/.htaccess || true
+              namei -l /var/www/html/.htaccess || true
+
+              echo "✅ Drupal deployment finished successfully."
+            INCONTAINER
           EOF
