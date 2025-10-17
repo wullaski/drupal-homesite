@@ -1,4 +1,4 @@
-name: Deploy Drupal Site via WireGuard
+name: Deploy Drupal Site
 
 on:
   push:
@@ -10,43 +10,57 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout repository
+      # 1. Checkout repo code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Install WireGuard
-      - name: Install WireGuard
-        run: sudo apt-get update && sudo apt-get install -y wireguard
-
-      # 3. Write WireGuard config from secret
-      - name: Setup WireGuard
-        run: echo "${{ secrets.WG_CONFIG }}" > wg0.conf
-
-      # 4. Bring up WireGuard interface
-      - name: Start WireGuard
-        run: sudo wg-quick up ./wg0.conf
-
-      # 5. Verify VPN handshake
-      - name: Check WireGuard handshake
-        run: sudo wg show
-
-      # 6. Stream code into Drupal container
-      - name: Deploy code into container
+      # 2. Install Tailscale
+      - name: Install Tailscale
         run: |
-          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+          curl -fsSL https://tailscale.com/install.sh | sh
+          sudo tailscaled &
+          sleep 5
+
+      # 3. Connect to Tailnet
+      - name: Connect to Tailnet
+        env:
+          TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+        run: |
+          sudo tailscale up --authkey=${TAILSCALE_AUTHKEY} --hostname=github-runner --timeout=30s
+          tailscale status
+
+      # 4. Deploy to homelab VM over SSH
+      - name: Deploy via SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.HOMELAB_SSH_KEY }}
+          SSH_USER: ${{ secrets.HOMELAB_SSH_USER }}
+          SSH_HOST: ${{ secrets.HOMELAB_TAILSCALE_IP }}
+        run: |
+          # Configure SSH
+          mkdir -p ~/.ssh
+          echo "${SSH_PRIVATE_KEY}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
+
+          # Stream code into Drupal container and run Composer + Drush
+          ssh -i ~/.ssh/id_rsa $SSH_USER@$SSH_HOST << 'EOF'
+            set -e
+            cd /var/lib/docker/volumes/b2282c6f80a803f10df538171294a66031c0e7a0c4028942463fc7564b75be95/_data
+
+            echo "Streaming latest code into container..."
             tar czf - ./ | docker exec -i homesite tar xzf - -C /var/www/html
-          EOF
 
-      # 7. Run Composer & Drush inside container
-      - name: Composer & Drush
-        run: |
-          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
-            docker exec -T homesite composer install --no-dev --optimize-autoloader
-            docker exec -T homesite drush cim -y
-            docker exec -T homesite drush cr
-          EOF
+            echo "Running Composer install..."
+            docker exec -i homesite composer install --no-interaction --prefer-dist
 
-      # 8. Tear down WireGuard
-      - name: Teardown WireGuard
-        if: always()
-        run: sudo wg-quick down ./wg0.conf
+            echo "Importing Drupal config..."
+            docker exec -i homesite drush cim -y
+
+            echo "Running database updates..."
+            docker exec -i homesite drush updb -y
+
+            echo "Clearing cache..."
+            docker exec -i homesite drush cr
+
+            echo "✅ Deployment complete."
+          EOF
