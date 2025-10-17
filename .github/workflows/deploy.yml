@@ -29,7 +29,7 @@ jobs:
           sudo tailscale up --authkey=${TAILSCALE_AUTHKEY} --hostname=github-runner --timeout=30s
           tailscale status
 
-      # 4. Debug SSH connection
+      # 4. Debug SSH connection with retries
       - name: Debug SSH connection
         env:
           SSH_PRIVATE_KEY: ${{ secrets.HOMELAB_SSH_KEY }}
@@ -42,7 +42,11 @@ jobs:
           ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
 
           echo "Testing SSH connectivity..."
-          ssh -i ~/.ssh/id_rsa -vvv $SSH_USER@$SSH_HOST "echo Connected!"
+          for i in {1..10}; do
+            ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa $SSH_USER@$SSH_HOST "echo Connected" && break
+            echo "SSH not ready yet, retrying ($i/10)..."
+            sleep 5
+          done
 
       # 5. Deploy Drupal site
       - name: Deploy Drupal via SSH
@@ -61,19 +65,28 @@ jobs:
           ssh -i ~/.ssh/id_rsa $SSH_USER@$SSH_HOST << 'EOF'
             set -e
 
+            # Install unzip if missing (needed for Composer scaffolding)
+            apt-get update && apt-get install -y unzip
+
             # Stream code into the container
             tar czf - ./ | docker exec -i homesite tar xzf - -C /var/www/html
 
-            docker exec -i homesite bash -c "
-              chown -R www-data:www-data /var/www/html
-              find /var/www/html -type d -exec chmod 755 {} \;
-              find /var/www/html -type f -exec chmod 644 {} \;
-              composer clear-cache
-              composer install --no-interaction --prefer-dist --no-dev
-              composer require drupal/core-composer-scaffold --update-with-dependencies
-            "
+            # Clear Composer cache
+            docker exec -i homesite composer clear-cache
 
-            # Run Drush tasks
+            # Reinstall Drupal scaffold to fix missing files
+            docker exec -i homesite composer remove drupal/core-composer-scaffold || true
+            docker exec -i homesite composer require drupal/core-composer-scaffold --update-with-dependencies
+
+            # Install other Composer dependencies
+            docker exec -i homesite composer install --no-interaction --prefer-dist --no-dev
+
+            # Fix ownership and permissions so Apache can read everything
+            docker exec -i homesite chown -R www-data:www-data /var/www/html
+            docker exec -i homesite find /var/www/html -type d -exec chmod 755 {} \;
+            docker exec -i homesite find /var/www/html -type f -exec chmod 644 {} \;
+
+            # Run Drush tasks as www-data
             docker exec -i -u www-data homesite drush cim -y
             docker exec -i -u www-data homesite drush updb -y
             docker exec -i -u www-data homesite drush cr
