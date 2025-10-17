@@ -29,20 +29,35 @@ jobs:
           sudo tailscale up --authkey=${TAILSCALE_AUTHKEY} --hostname=github-runner --timeout=30s
           tailscale status
 
-      # 4. Deploy to homelab VM over SSH
-      - name: Deploy via SSH
+      # 4. Debug SSH connection
+      - name: Debug SSH connection
         env:
           SSH_PRIVATE_KEY: ${{ secrets.HOMELAB_SSH_KEY }}
           SSH_USER: ${{ secrets.HOMELAB_SSH_USER }}
           SSH_HOST: ${{ secrets.HOMELAB_TAILSCALE_IP }}
         run: |
-          # Configure SSH
           mkdir -p ~/.ssh
           echo "${SSH_PRIVATE_KEY}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
 
-          # Stream code into Drupal container and run Composer + Drush
+          echo "Testing SSH connectivity..."
+          ssh -i ~/.ssh/id_rsa -vvv $SSH_USER@$SSH_HOST "echo Connected!"
+
+      # 5. Deploy code via SSH (runs only if debug passes)
+      - name: Deploy via SSH
+        if: success()
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.HOMELAB_SSH_KEY }}
+          SSH_USER: ${{ secrets.HOMELAB_SSH_USER }}
+          SSH_HOST: ${{ secrets.HOMELAB_TAILSCALE_IP }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "${SSH_PRIVATE_KEY}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
+
+          echo "Streaming code into Drupal container and deploying..."
           ssh -i ~/.ssh/id_rsa $SSH_USER@$SSH_HOST << 'EOF'
             set -e
             cd /var/lib/docker/volumes/b2282c6f80a803f10df538171294a66031c0e7a0c4028942463fc7564b75be95/_data
@@ -54,13 +69,4 @@ jobs:
             docker exec -i homesite composer install --no-interaction --prefer-dist
 
             echo "Importing Drupal config..."
-            docker exec -i homesite drush cim -y
-
-            echo "Running database updates..."
-            docker exec -i homesite drush updb -y
-
-            echo "Clearing cache..."
-            docker exec -i homesite drush cr
-
-            echo "✅ Deployment complete."
-          EOF
+            docker exec -i homesite drus
