@@ -9,7 +9,7 @@ on:
       - 'drupal/**'
       - 'composer.json'
       - 'composer.lock'
-      - '.github/workflows/deploy-drupal.yml'
+      - '.github/workflows/deploy.yml'
 
 jobs:
   deploy:
