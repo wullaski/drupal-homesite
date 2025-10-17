@@ -63,52 +63,50 @@ jobs:
           echo "⚠️ Could not connect to SSH host."
           exit 0
 
-      # 5. 🚀 Deploy Drupal (only if SSH connection works)
-      - name: 🚀 Deploy Drupal
-        if: env.SSH_OK == 'true'
+            # 5. Deploy Drupal site
+      - name: Deploy Drupal via SSH
+        if: success()
         env:
           SSH_PRIVATE_KEY: ${{ secrets.HOMELAB_SSH_KEY }}
           SSH_USER: ${{ secrets.HOMELAB_SSH_USER }}
           SSH_HOST: ${{ secrets.HOMELAB_TAILSCALE_IP }}
         run: |
-          set -e
           mkdir -p ~/.ssh
           echo "${SSH_PRIVATE_KEY}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
 
-          echo "--- Copying code to host ---"
-          rsync -avz --delete --exclude='.git' --exclude='node_modules' ./ $SSH_USER@$SSH_HOST:/var/www/html/
+          echo "🚀 Deploying Drupal code..."
+          
+          # --- Ensure rsync is installed on the remote host ---
+          echo "🔧 Checking for rsync on remote host..."
+          ssh -i ~/.ssh/id_rsa $SSH_USER@$SSH_HOST 'command -v rsync >/dev/null 2>&1 || { echo "rsync not found, installing..."; sudo apt-get update -qq && sudo apt-get install -y rsync; }'
+          echo "✅ rsync ready."
 
+          # --- Copy code to remote host ---
+          echo "--- Copying code to host ---"
+          rsync -az --delete -e "ssh -i ~/.ssh/id_rsa" ./ $SSH_USER@$SSH_HOST:/opt/drupal_deploy_tmp/
+
+          # --- Run deployment inside container ---
           echo "--- Running deployment steps inside container ---"
-          ssh -i ~/.ssh/id_rsa $SSH_USER@$SSH_HOST << 'INCONTAINER'
+          ssh -i ~/.ssh/id_rsa $SSH_USER@$SSH_HOST << 'EOF'
             set -e
 
-            CONTAINER=$(docker ps --filter "name=homesite" --format "{{.ID}}" | head -n 1)
-            echo "Found Drupal container: $CONTAINER"
+            # Copy files into container's Drupal directory
+            docker exec -i -u root homesite bash -c "rm -rf /var/www/html/* && cp -r /opt/drupal_deploy_tmp/* /var/www/html/ && chown -R www-data:www-data /var/www/html"
 
-            if [ -z "$CONTAINER" ]; then
-              echo "❌ No running Drupal container found!"
-              exit 1
-            fi
+            # Install unzip & apache2-utils (for Composer + Drupal tools)
+            docker exec -i -u root homesite bash -c "apt-get update -qq && apt-get install -y unzip apache2-utils"
 
-            docker exec $CONTAINER bash -c "
-              cd /opt/drupal
-              echo 'Running composer install...'
-              composer install --no-interaction --no-progress --optimize-autoloader
+            # Move into Drupal directory
+            docker exec -i homesite bash -c "cd /opt/drupal && composer clear-cache && composer config --no-plugins allow-plugins.drupal/core-composer-scaffold true && composer install --no-interaction --prefer-dist --no-dev"
 
-              echo 'Allowing Drupal composer plugins...'
-              composer config --no-plugins allow-plugins.drupal/core-composer-scaffold true
+            # Run Drush commands as www-data
+            docker exec -i -u www-data homesite bash -c "cd /opt/drupal && drush cim -y && drush updb -y && drush cr"
 
-              echo 'Running composer drupal:scaffold...'
-              composer drupal:scaffold || true
+            echo "✅ Deployment complete."
+          EOF
 
-              echo 'Clearing Drupal cache...'
-              vendor/bin/drush cr || true
-
-              echo '✅ Deployment inside container complete.'
-            "
-          INCONTAINER
 
       # 6. Skip message if offline
       - name: 💤 Homelab offline, skipping deploy
