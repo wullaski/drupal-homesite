@@ -61,22 +61,18 @@ jobs:
           ssh -i ~/.ssh/id_rsa $SSH_USER@$SSH_HOST << 'EOF'
             set -e
 
-            # Stream latest code into the container
+            # Stream latest code directly into the Drupal container
             tar czf - ./ | docker exec -i homesite tar xzf - -C /var/www/html
 
-            # Clear Composer cache to avoid scaffold issues
+            # Run Composer and Drush inside the container
             docker exec -i homesite composer clear-cache
-
-            # Install dependencies (no-dev for CI/CD)
             docker exec -i homesite composer install --no-interaction --prefer-dist --no-dev
-
-            # Ensure Drupal core scaffold files are present
             docker exec -i homesite composer require drupal/core-composer-scaffold --update-with-dependencies
-
-            # Run Drush tasks
             docker exec -i homesite drush cim -y
             docker exec -i homesite drush updb -y
             docker exec -i homesite drush cr
 
+
             echo "✅ Deployment complete."
           EOF
+  
