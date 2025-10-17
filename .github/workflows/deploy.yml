@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout repo code
+      # 1. Checkout code
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -44,8 +44,8 @@ jobs:
           echo "Testing SSH connectivity..."
           ssh -i ~/.ssh/id_rsa -vvv $SSH_USER@$SSH_HOST "echo Connected!"
 
-      # 5. Deploy code via SSH (runs only if debug passes)
-      - name: Deploy via SSH
+      # 5. Deploy Drupal site
+      - name: Deploy Drupal via SSH
         if: success()
         env:
           SSH_PRIVATE_KEY: ${{ secrets.HOMELAB_SSH_KEY }}
@@ -57,16 +57,18 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
 
-          echo "Streaming code into Drupal container and deploying..."
+          echo "Deploying Drupal code..."
           ssh -i ~/.ssh/id_rsa $SSH_USER@$SSH_HOST << 'EOF'
             set -e
-            cd /var/lib/docker/volumes/b2282c6f80a803f10df538171294a66031c0e7a0c4028942463fc7564b75be95/_data
 
-            echo "Streaming latest code into container..."
+            # Stream latest code directly into the Drupal container
             tar czf - ./ | docker exec -i homesite tar xzf - -C /var/www/html
 
-            echo "Running Composer install..."
+            # Run Composer and Drush inside the container
             docker exec -i homesite composer install --no-interaction --prefer-dist
+            docker exec -i homesite drush cim -y
+            docker exec -i homesite drush updb -y
+            docker exec -i homesite drush cr
 
-            echo "Importing Drupal config..."
-            docker exec -i homesite drus
+            echo "✅ Deployment complete."
+          EOF
