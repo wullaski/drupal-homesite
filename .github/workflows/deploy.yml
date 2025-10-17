@@ -65,8 +65,8 @@ jobs:
           ssh -i ~/.ssh/id_rsa $SSH_USER@$SSH_HOST << 'EOF'
             set -e
 
-            # Install unzip if missing (needed for Composer scaffolding)
-            apt-get update && apt-get install -y unzip
+            # Install unzip as root (needed for Composer scaffold)
+            docker exec -i -u root homesite bash -c "apt-get update && apt-get install -y unzip"
 
             # Stream code into the container
             tar czf - ./ | docker exec -i homesite tar xzf - -C /var/www/html
