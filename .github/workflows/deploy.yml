@@ -144,7 +144,7 @@ jobs:
               echo '⚙️  Configuring composer plugins...' && \\
               composer config --no-plugins allow-plugins.drupal/core-composer-scaffold true && \\
               echo '📦 Installing composer dependencies...' && \\
-              composer install --no-interaction --prefer-dist --no-dev --timeout=300 && \\
+              composer install --no-interaction --prefer-dist --no-dev && \\
               echo '🔐 Setting file permissions...' && \\
               chown -R www-data:www-data /opt/drupal && \\
               find /opt/drupal -type d -exec chmod 755 {} \\; && \\
