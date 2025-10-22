@@ -29,17 +29,55 @@ jobs:
           sudo tailscale up --authkey=${TAILSCALE_AUTHKEY} --hostname=github-runner --timeout=30s
           tailscale status
 
-      # 4. Prepare SSH connection
+      # 4. Verify Tailscale connectivity and setup SSH
+      - name: Test Tailscale connectivity
+        env:
+          SSH_HOST: ${{ secrets.HOMELAB_TAILSCALE_IP }}
+        run: |
+          echo "🔍 Testing connectivity to homelab server..."
+          echo "Target host: $SSH_HOST"
+          
+          # Test basic connectivity
+          if ping -c 3 -W 5 $SSH_HOST; then
+            echo "✅ Ping successful to $SSH_HOST"
+          else
+            echo "❌ Ping failed to $SSH_HOST"
+            echo "Available Tailscale peers:"
+            tailscale status
+            exit 1
+          fi
+
       - name: Setup SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.HOMELAB_SSH_KEY }}
           SSH_USER: ${{ secrets.HOMELAB_SSH_USER }}
           SSH_HOST: ${{ secrets.HOMELAB_TAILSCALE_IP }}
         run: |
+          echo "🔧 Setting up SSH connection..."
           mkdir -p ~/.ssh
           echo "${SSH_PRIVATE_KEY}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
+          
+          echo "🔍 Scanning for host keys (timeout: 10s)..."
+          if timeout 10 ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts 2>/dev/null; then
+            echo "✅ Host key scan successful"
+          else
+            echo "⚠️  Host key scan failed, adding host to known_hosts with StrictHostKeyChecking=no"
+            echo "Host $SSH_HOST" >> ~/.ssh/config
+            echo "  StrictHostKeyChecking no" >> ~/.ssh/config
+            echo "  UserKnownHostsFile /dev/null" >> ~/.ssh/config
+          fi
+          
+          echo "🧪 Testing SSH connection..."
+          if ssh -o ConnectTimeout=10 -o BatchMode=yes $SSH_USER@$SSH_HOST 'echo "SSH connection successful"'; then
+            echo "✅ SSH connection test passed"
+          else
+            echo "❌ SSH connection test failed"
+            echo "SSH config:"
+            cat ~/.ssh/config || echo "No SSH config found"
+            exit 1
+          fi
+          
           echo "✅ SSH key setup complete"
 
       # 5. Deploy Drupal via SSH + rsync
@@ -47,39 +85,71 @@ jobs:
         env:
           SSH_USER: ${{ secrets.HOMELAB_SSH_USER }}
           SSH_HOST: ${{ secrets.HOMELAB_TAILSCALE_IP }}
+        timeout-minutes: 15
         run: |
           echo "🚀 Deploying Drupal code..."
 
           # Install rsync if missing
           echo "🔧 Checking for rsync on remote host..."
-          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST "command -v rsync >/dev/null 2>&1 || (sudo apt-get update -qq && sudo apt-get install -y rsync)"
+          ssh -o ConnectTimeout=30 -o ServerAliveInterval=10 $SSH_USER@$SSH_HOST "command -v rsync >/dev/null 2>&1 || (sudo apt-get update -qq && sudo apt-get install -y rsync)"
 
           # Copy updated code to host temp dir
           echo "--- Copying code to host ---"
-          rsync -az --delete --exclude '.git' --exclude '.github' ./ $SSH_USER@$SSH_HOST:/home/$SSH_USER/drupal_deploy_tmp
+          rsync -az --timeout=300 --delete --exclude '.git' --exclude '.github' ./ $SSH_USER@$SSH_HOST:/home/$SSH_USER/drupal_deploy_tmp
 
           # Move files into live directory and run deployment
-          ssh $SSH_USER@$SSH_HOST << 'EOF'
+          echo "--- Starting remote deployment ---"
+          ssh -o ConnectTimeout=30 -o ServerAliveInterval=10 $SSH_USER@$SSH_HOST << 'EOF'
             set -e
             echo "--- Moving code into live Drupal volume ---"
             sudo rsync -a --delete /home/$SSH_USER/drupal_deploy_tmp/ /opt/drupal/
             sudo rm -rf /home/$SSH_USER/drupal_deploy_tmp
 
+            echo "--- Checking if container is running ---"
+            if ! docker ps | grep -q homesite; then
+              echo "⚠️  Container 'homesite' not running, attempting to start..."
+              docker start homesite || true
+              sleep 5
+            fi
+
             echo "--- Running deployment steps inside container ---"
-            docker exec -i homesite bash -c "
+            docker exec -i homesite timeout 600 bash -c "
               cd /opt/drupal && \
+              echo '🔧 Installing system dependencies...' && \
               apt-get update -qq && apt-get install -y unzip apache2-utils && \
+              echo '🧹 Clearing composer cache...' && \
               composer clear-cache && \
+              echo '⚙️  Configuring composer plugins...' && \
               composer config --no-plugins allow-plugins.drupal/core-composer-scaffold true && \
-              composer install --no-interaction --prefer-dist --no-dev && \
+              echo '📦 Installing composer dependencies...' && \
+              composer install --no-interaction --prefer-dist --no-dev --timeout=300 && \
+              echo '🔐 Setting file permissions...' && \
               chown -R www-data:www-data /opt/drupal && \
               find /opt/drupal -type d -exec chmod 755 {} \; && \
               find /opt/drupal -type f -exec chmod 644 {} \; && \
-              drush cim -y && drush updb -y && drush cr
+              echo '📊 Importing configuration...' && \
+              drush cim -y && \
+              echo '🗄️  Running database updates...' && \
+              drush updb -y && \
+              echo '🧹 Clearing caches...' && \
+              drush cr && \
+              echo '✅ Drupal deployment steps completed successfully'
             "
 
-            echo "--- Restarting container ---"
+            echo "--- Restarting container for clean state ---"
             docker restart homesite
+            
+            echo "--- Waiting for container to be ready ---"
+            sleep 10
+            for i in {1..30}; do
+              if docker ps | grep -q homesite && docker exec homesite curl -f http://localhost >/dev/null 2>&1; then
+                echo "✅ Container is healthy and responding"
+                break
+              fi
+              echo "⏳ Waiting for container to be ready... ($i/30)"
+              sleep 2
+            done
+            
             echo "✅ Deployment complete and container restarted."
           EOF
 
