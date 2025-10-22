@@ -99,7 +99,7 @@ jobs:
 
           # Move files into live directory and run deployment
           echo "--- Starting remote deployment ---"
-          ssh -o ConnectTimeout=30 -o ServerAliveInterval=10 $SSH_USER@$SSH_HOST << 'EOF'
+          ssh -o ConnectTimeout=30 -o ServerAliveInterval=10 $SSH_USER@$SSH_HOST << EOF
             set -e
             echo "--- Moving code into live Drupal volume ---"
             sudo rsync -a --delete /home/$SSH_USER/drupal_deploy_tmp/ /opt/drupal/
