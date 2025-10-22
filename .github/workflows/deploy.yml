@@ -89,9 +89,16 @@ jobs:
         run: |
           echo "🚀 Deploying Drupal code..."
 
-          # Install rsync if missing
+          # Install rsync if missing (using docker if needed)
           echo "🔧 Checking for rsync on remote host..."
-          ssh -o ConnectTimeout=30 -o ServerAliveInterval=10 $SSH_USER@$SSH_HOST "command -v rsync >/dev/null 2>&1 || (sudo apt-get update -qq && sudo apt-get install -y rsync)"
+          ssh -o ConnectTimeout=30 -o ServerAliveInterval=10 $SSH_USER@$SSH_HOST "
+            if ! command -v rsync >/dev/null 2>&1; then
+              echo '⚠️  rsync not found, using docker to provide rsync functionality'
+              echo 'Note: If you need system rsync, install it manually with: sudo apt-get install -y rsync'
+            else
+              echo '✅ rsync is available'
+            fi
+          "
 
           # Copy updated code to host temp dir
           echo "--- Copying code to host ---"
@@ -99,59 +106,74 @@ jobs:
 
           # Move files into live directory and run deployment
           echo "--- Starting remote deployment ---"
-          ssh -o ConnectTimeout=30 -o ServerAliveInterval=10 $SSH_USER@$SSH_HOST << EOF
+          ssh -o ConnectTimeout=30 -o ServerAliveInterval=10 $SSH_USER@$SSH_HOST "
             set -e
-            echo "--- Moving code into live Drupal volume ---"
-            sudo rsync -a --delete /home/$SSH_USER/drupal_deploy_tmp/ /opt/drupal/
-            sudo rm -rf /home/$SSH_USER/drupal_deploy_tmp
+            echo '--- Testing docker access ---'
+            if docker ps >/dev/null 2>&1; then
+              echo '✅ Docker access confirmed'
+            else
+              echo '❌ This script requires docker access for the SSH user'
+              echo 'Please run this command on your server to add the user to docker group:'
+              echo '  sudo usermod -aG docker $SSH_USER'
+              echo 'Then logout and login again, or run: newgrp docker'
+              exit 1
+            fi
+            
+            echo '--- Moving code into live Drupal volume ---'
+            # Use docker to copy files with proper permissions
+            docker run --rm -v /home/$SSH_USER/drupal_deploy_tmp:/source -v /opt/drupal:/dest alpine sh -c '
+              rm -rf /dest/* /dest/.[^.]* 2>/dev/null || true
+              cp -a /source/. /dest/
+            '
+            rm -rf /home/$SSH_USER/drupal_deploy_tmp
 
-            echo "--- Checking if container is running ---"
+            echo '--- Checking if container is running ---'
             if ! docker ps | grep -q homesite; then
-              echo "⚠️  Container 'homesite' not running, attempting to start..."
+              echo '⚠️  Container homesite not running, attempting to start...'
               docker start homesite || true
               sleep 5
             fi
 
-            echo "--- Running deployment steps inside container ---"
-            docker exec -i homesite timeout 600 bash -c "
-              cd /opt/drupal && \
-              echo '🔧 Installing system dependencies...' && \
-              apt-get update -qq && apt-get install -y unzip apache2-utils && \
-              echo '🧹 Clearing composer cache...' && \
-              composer clear-cache && \
-              echo '⚙️  Configuring composer plugins...' && \
-              composer config --no-plugins allow-plugins.drupal/core-composer-scaffold true && \
-              echo '📦 Installing composer dependencies...' && \
-              composer install --no-interaction --prefer-dist --no-dev --timeout=300 && \
-              echo '🔐 Setting file permissions...' && \
-              chown -R www-data:www-data /opt/drupal && \
-              find /opt/drupal -type d -exec chmod 755 {} \; && \
-              find /opt/drupal -type f -exec chmod 644 {} \; && \
-              echo '📊 Importing configuration...' && \
-              drush cim -y && \
-              echo '🗄️  Running database updates...' && \
-              drush updb -y && \
-              echo '🧹 Clearing caches...' && \
-              drush cr && \
+            echo '--- Running deployment steps inside container ---'
+            docker exec -i homesite timeout 600 bash -c \"
+              cd /opt/drupal && \\
+              echo '🔧 Installing system dependencies...' && \\
+              apt-get update -qq && apt-get install -y unzip apache2-utils && \\
+              echo '🧹 Clearing composer cache...' && \\
+              composer clear-cache && \\
+              echo '⚙️  Configuring composer plugins...' && \\
+              composer config --no-plugins allow-plugins.drupal/core-composer-scaffold true && \\
+              echo '📦 Installing composer dependencies...' && \\
+              composer install --no-interaction --prefer-dist --no-dev --timeout=300 && \\
+              echo '🔐 Setting file permissions...' && \\
+              chown -R www-data:www-data /opt/drupal && \\
+              find /opt/drupal -type d -exec chmod 755 {} \\; && \\
+              find /opt/drupal -type f -exec chmod 644 {} \\; && \\
+              echo '📊 Importing configuration...' && \\
+              drush cim -y && \\
+              echo '🗄️  Running database updates...' && \\
+              drush updb -y && \\
+              echo '🧹 Clearing caches...' && \\
+              drush cr && \\
               echo '✅ Drupal deployment steps completed successfully'
-            "
+            \"
 
-            echo "--- Restarting container for clean state ---"
+            echo '--- Restarting container for clean state ---'
             docker restart homesite
             
-            echo "--- Waiting for container to be ready ---"
+            echo '--- Waiting for container to be ready ---'
             sleep 10
             for i in {1..30}; do
               if docker ps | grep -q homesite && docker exec homesite curl -f http://localhost >/dev/null 2>&1; then
-                echo "✅ Container is healthy and responding"
+                echo '✅ Container is healthy and responding'
                 break
               fi
-              echo "⏳ Waiting for container to be ready... ($i/30)"
+              echo '⏳ Waiting for container to be ready... (\$i/30)'
               sleep 2
             done
             
-            echo "✅ Deployment complete and container restarted."
-          EOF
+            echo '✅ Deployment complete and container restarted.'
+          "
 
       # 6. Clean up Tailscale session
       - name: Disconnect Tailscale
