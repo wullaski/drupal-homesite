@@ -162,6 +162,13 @@ jobs:
               composer config --no-plugins allow-plugins.php-http/discovery true && \\
               echo '📦 Installing composer dependencies (with update to resolve lock conflicts)...' && \\
               composer update --no-cache --no-interaction --prefer-dist && \\
+              echo '🔧 Ensuring Drush is installed...' && \\
+              if ! composer show drush/drush >/dev/null 2>&1; then \\
+                echo '⚠️  Drush not found, installing explicitly...' && \\
+                composer require drush/drush --no-cache --no-interaction --prefer-dist; \\
+              else \\
+                echo '✅ Drush package is already installed'; \\
+              fi && \\
               echo '🔄 Verifying all packages installed...' && \\
               composer show | grep -E '(drush|drupal)' && \\
               echo '🔍 Checking if Drush was installed...' && \\
@@ -193,9 +200,12 @@ jobs:
 
             echo '--- Restarting container for clean state ---'
             if docker ps --format 'table {{.Names}}' | grep -q '^homesite$'; then
+              echo '🔄 Restarting container homesite...'
               docker restart homesite
+              echo '✅ Container restarted successfully'
             else
-              echo '⚠️  Container homesite not running, skipping restart'
+              echo '⚠️  Container homesite not running, attempting to start...'
+              docker start homesite || echo '❌ Failed to start container'
             fi
             
             echo '--- Waiting for container to be ready ---'
