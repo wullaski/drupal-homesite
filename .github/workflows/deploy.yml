@@ -56,13 +56,14 @@ jobs:
 
           # Copy updated code to host temp dir
           echo "--- Copying code to host ---"
-          rsync -az --delete --exclude '.git' --exclude '.github' ./ $SSH_USER@$SSH_HOST:/opt/drupal_deploy_tmp
+          rsync -az --delete --exclude '.git' --exclude '.github' ./ $SSH_USER@$SSH_HOST:/home/$SSH_USER/drupal_deploy_tmp
 
           # Move files into live directory and run deployment
           ssh $SSH_USER@$SSH_HOST << 'EOF'
             set -e
             echo "--- Moving code into live Drupal volume ---"
-            sudo rsync -a --delete /opt/drupal_deploy_tmp/ /opt/drupal/
+            sudo rsync -a --delete /home/$SSH_USER/drupal_deploy_tmp/ /opt/drupal/
+            sudo rm -rf /home/$SSH_USER/drupal_deploy_tmp
 
             echo "--- Running deployment steps inside container ---"
             docker exec -i homesite bash -c "
