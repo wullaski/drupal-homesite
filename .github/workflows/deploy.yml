@@ -185,6 +185,8 @@ jobs:
               chown -R www-data:www-data /opt/drupal && \\
               find /opt/drupal -type d -exec chmod 755 {} \\; && \\
               find /opt/drupal -type f -exec chmod 644 {} \\; && \\
+              echo '🔧 Preserving execute permissions for vendor binaries...' && \\
+              find /opt/drupal/vendor/bin -type f -exec chmod 755 {} \\; && \\
               echo '📊 Importing configuration...' && \\
               if [ -f './vendor/bin/drush' ]; then \\
                 ./vendor/bin/drush cim -y && \\
