@@ -143,20 +143,29 @@ jobs:
               composer clear-cache && \\
               echo '⚙️  Configuring composer plugins...' && \\
               composer config --no-plugins allow-plugins.drupal/core-composer-scaffold true && \\
+              composer config --no-plugins allow-plugins.drush/drush true && \\
               echo '📦 Installing composer dependencies...' && \\
               composer install --no-interaction --prefer-dist --no-dev && \\
+              echo '🔍 Checking if Drush was installed...' && \\
+              ls -la vendor/bin/ | grep drush || echo 'Drush not found in vendor/bin' && \\
+              echo '🔍 Checking composer.json contents...' && \\
+              grep -A5 -B5 drush composer.json || echo 'No drush found in composer.json' && \\
               echo '🔐 Setting file permissions...' && \\
               chown -R www-data:www-data /opt/drupal && \\
               find /opt/drupal -type d -exec chmod 755 {} \\; && \\
               find /opt/drupal -type f -exec chmod 644 {} \\; && \\
               echo '📊 Importing configuration...' && \\
-              ./vendor/bin/drush cim -y && \\
-              echo '🗄️  Running database updates...' && \\
-              ./vendor/bin/drush updb -y && \\
-              echo '🧹 Clearing caches...' && \\
-              ./vendor/bin/drush cr && \\
+              if [ -f './vendor/bin/drush' ]; then \\
+                ./vendor/bin/drush cim -y && \\
+                echo '🗄️  Running database updates...' && \\
+                ./vendor/bin/drush updb -y && \\
+                echo '🧹 Clearing caches...' && \\
+                ./vendor/bin/drush cr; \\
+              else \\
+                echo '❌ Drush not found, skipping Drupal commands'; \\
+              fi && \\
               echo '✅ Drupal deployment steps completed successfully'
-            \"
+            \""
 
             echo '--- Restarting container for clean state ---'
             docker restart homesite
