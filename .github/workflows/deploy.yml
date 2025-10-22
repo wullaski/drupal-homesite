@@ -144,8 +144,10 @@ jobs:
               echo '⚙️  Configuring composer plugins...' && \\
               composer config --no-plugins allow-plugins.drupal/core-composer-scaffold true && \\
               composer config --no-plugins allow-plugins.drush/drush true && \\
+              composer config --no-plugins allow-plugins.composer/installers true && \\
+              composer config --no-plugins allow-plugins.drupal/core-project-message true && \\
               echo '📦 Installing composer dependencies...' && \\
-              composer install --no-interaction --prefer-dist --no-dev && \\
+              composer install --no-interaction --prefer-dist && \\
               echo '🔍 Checking if Drush was installed...' && \\
               ls -la vendor/bin/ | grep drush || echo 'Drush not found in vendor/bin' && \\
               echo '🔍 Checking composer.json contents...' && \\
