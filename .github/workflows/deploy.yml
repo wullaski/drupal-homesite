@@ -161,11 +161,7 @@ jobs:
             fi
 
             echo '--- Running deployment steps inside container ---'
-            docker exec -i homesite timeout 600 bash -c \"
-              export IS_DOCKER_DEPLOYMENT=true && \\
-              export DB_NAME='${{ secrets.DB_NAME }}' && \\
-              export DB_USER='${{ secrets.DB_USER }}' && \\
-              export DB_PASSWORD='${{ secrets.DB_PASSWORD }}' && \\
+            docker exec -i -e IS_DOCKER_DEPLOYMENT=true -e DB_NAME='${{ secrets.DB_NAME }}' -e DB_USER='${{ secrets.DB_USER }}' -e DB_PASSWORD='${{ secrets.DB_PASSWORD }}' homesite timeout 600 bash -c \"
               echo 'Debug: Environment variables set:' && \\
               echo '  IS_DOCKER_DEPLOYMENT=' \$IS_DOCKER_DEPLOYMENT && \\
               echo '  DB_NAME=' \$DB_NAME && \\
@@ -198,7 +194,7 @@ jobs:
               composer show | grep -E '(drush|drupal)' && \\
               echo '🔍 Checking if Drush was installed...' && \\
               ls -la vendor/bin/ | grep drush || echo 'Drush not found in vendor/bin' && \\
-              echo '� Setting file permissions...' && \\
+              echo '🔧 Setting file permissions...' && \\
               chown -R www-data:www-data /opt/drupal && \\
               find /opt/drupal -type d -exec chmod 755 {} \\; && \\
               find /opt/drupal -type f -exec chmod 644 {} \\; && \\
@@ -206,7 +202,7 @@ jobs:
               find /opt/drupal/vendor/bin -type f -exec chmod 755 {} \\; && \\
               echo '🔧 Ensuring Drush executable has correct permissions...' && \\
               find /opt/drupal/vendor -name 'drush' -type f -exec chmod 755 {} \\; && \\
-              echo '� Final verification of Drush installation...' && \\
+              echo 'Final verification of Drush installation...' && \\
               if [ -f './vendor/bin/drush' ]; then \\
                 echo '✅ Drush binary found at ./vendor/bin/drush' && \\
                 ./vendor/bin/drush --version; \\
@@ -214,8 +210,14 @@ jobs:
                 echo '❌ Drush binary not found, checking composer show output...' && \\
                 composer show drush/drush || echo 'Drush package not installed'; \\
               fi && \\
-              echo '� Checking database connectivity...' && \\
+              echo 'Checking database connectivity...' && \\
+              echo 'Debug: Testing network connectivity to drupal_db...' && \\
+              ping -c 2 drupal_db || echo 'Cannot ping drupal_db container' && \\
+              echo 'Debug: Testing port 3306 on drupal_db...' && \\
+              timeout 5 bash -c '</dev/tcp/drupal_db/3306' && echo 'Port 3306 accessible' || echo 'Port 3306 not accessible' && \\
               if [ -f './vendor/bin/drush' ]; then \\
+                echo 'Debug: Testing database connection with drush status...' && \\
+                ./vendor/bin/drush status || echo 'Drush status failed' && \\
                 if ./vendor/bin/drush status --format=json 2>/dev/null | grep -q '\"bootstrap\":\"Successful\"'; then \\
                   echo '✅ Database connection verified' && \\
                   echo '📊 Importing configuration...' && \\
