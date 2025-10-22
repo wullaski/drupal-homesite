@@ -161,83 +161,84 @@ jobs:
             fi
 
             echo '--- Running deployment steps inside container ---'
-            docker exec -i -e IS_DOCKER_DEPLOYMENT=true -e DB_NAME="$DB_NAME" -e DB_USER="$DB_USER" -e DB_PASSWORD="$DB_PASSWORD" homesite timeout 600 bash -c '
-              echo "Debug: Environment variables set:" && \
-              echo "  IS_DOCKER_DEPLOYMENT=" $IS_DOCKER_DEPLOYMENT && \
-              echo "  DB_NAME=" $DB_NAME && \
-              echo "  DB_USER=" $DB_USER && \
-              echo "  DB_HOST will default to: drupal_db" && \
-              cd /opt/drupal && \
-              echo "🔧 Installing system dependencies..." && \
-              apt-get update -qq && apt-get install -y unzip apache2-utils && \
-              echo "🧹 Clearing composer cache..." && \
-              composer clear-cache && \
-              echo "⚙️  Configuring composer plugins..." && \
-              composer config --no-plugins allow-plugins.drupal/core-composer-scaffold true && \
-              composer config --no-plugins allow-plugins.drush/drush true && \
-              composer config --no-plugins allow-plugins.composer/installers true && \
-              composer config --no-plugins allow-plugins.drupal/core-project-message true && \
-              composer config --no-plugins allow-plugins.php-tuf/composer-integration true && \
-              composer config --no-plugins allow-plugins.phpstan/extension-installer true && \
-              composer config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true && \
-              composer config --no-plugins allow-plugins.php-http/discovery true && \
-              echo '📦 Installing composer dependencies (with update to resolve lock conflicts)...' && \\
-              composer update --no-cache --no-interaction --prefer-dist && \\
-              echo '🔧 Ensuring Drush is installed...' && \\
-              if ! composer show drush/drush >/dev/null 2>&1; then \\
-                echo '⚠️  Drush not found, installing explicitly...' && \\
-                composer require drush/drush --no-cache --no-interaction --prefer-dist; \\
-              else \\
-                echo '✅ Drush package is already installed'; \\
-              fi && \\
-              echo '🔄 Verifying all packages installed...' && \\
-              composer show | grep -E '(drush|drupal)' && \\
-              echo '🔍 Checking if Drush was installed...' && \\
-              ls -la vendor/bin/ | grep drush || echo 'Drush not found in vendor/bin' && \\
-              echo '🔧 Setting file permissions...' && \\
-              chown -R www-data:www-data /opt/drupal && \\
-              find /opt/drupal -type d -exec chmod 755 {} \\; && \\
-              find /opt/drupal -type f -exec chmod 644 {} \\; && \\
-              echo '🔧 Preserving execute permissions for vendor binaries...' && \\
-              find /opt/drupal/vendor/bin -type f -exec chmod 755 {} \\; && \\
-              echo '🔧 Ensuring Drush executable has correct permissions...' && \\
-              find /opt/drupal/vendor -name 'drush' -type f -exec chmod 755 {} \\; && \\
-              echo 'Final verification of Drush installation...' && \\
-              if [ -f './vendor/bin/drush' ]; then \\
-                echo '✅ Drush binary found at ./vendor/bin/drush' && \\
-                ./vendor/bin/drush --version; \\
-              else \\
-                echo '❌ Drush binary not found, checking composer show output...' && \\
-                composer show drush/drush || echo 'Drush package not installed'; \\
-              fi && \\
-              echo 'Checking database connectivity...' && \\
-              echo 'Debug: Testing network connectivity to drupal_db...' && \\
-              ping -c 2 drupal_db || echo 'Cannot ping drupal_db container' && \\
-              echo 'Debug: Testing port 3306 on drupal_db...' && \\
-              timeout 5 bash -c '</dev/tcp/drupal_db/3306' && echo 'Port 3306 accessible' || echo 'Port 3306 not accessible' && \\
-              if [ -f './vendor/bin/drush' ]; then \\
-                echo 'Debug: Testing database connection with drush status...' && \\
-                ./vendor/bin/drush status || echo 'Drush status failed' && \\
-                if ./vendor/bin/drush status --format=json 2>/dev/null | grep -q '\"bootstrap\":\"Successful\"'; then \\
-                  echo '✅ Database connection verified' && \\
-                  echo '📊 Importing configuration...' && \\
-                  ./vendor/bin/drush cim -y && \\
-                  echo '🗄️  Running database updates...' && \\
-                  ./vendor/bin/drush updb -y && \\
-                  echo '🧹 Clearing caches...' && \\
-                  ./vendor/bin/drush cr; \\
-                else \\
-                  echo '⚠️  Database not connected - container may need to be connected to docker_net network' && \\
-                  echo 'To fix this, run on your server:' && \\
-                  echo '  docker network connect docker_net homesite' && \\
-                  echo 'And ensure your settings.php database host points to the database container name' && \\
-                  echo 'Skipping Drupal commands for now...'; \\
-                fi; \\
-              else \\
-                echo '❌ Drush not found, skipping Drupal commands'; \\
-              fi && \\
+            docker exec -i -e IS_DOCKER_DEPLOYMENT=true -e DB_NAME="$DB_NAME" -e DB_USER="$DB_USER" -e DB_PASSWORD="$DB_PASSWORD" homesite timeout 600 bash << 'EOF'
+              set -e
+              echo "Debug: Environment variables set:"
+              echo "  IS_DOCKER_DEPLOYMENT=$IS_DOCKER_DEPLOYMENT"
+              echo "  DB_NAME=$DB_NAME"
+              echo "  DB_USER=$DB_USER"
+              echo "  DB_HOST will default to: drupal_db"
+              cd /opt/drupal
+              echo "🔧 Installing system dependencies..."
+              apt-get update -qq && apt-get install -y unzip apache2-utils
+              echo "🧹 Clearing composer cache..."
+              composer clear-cache
+              echo "⚙️  Configuring composer plugins..."
+              composer config --no-plugins allow-plugins.drupal/core-composer-scaffold true
+              composer config --no-plugins allow-plugins.drush/drush true
+              composer config --no-plugins allow-plugins.composer/installers true
+              composer config --no-plugins allow-plugins.drupal/core-project-message true
+              composer config --no-plugins allow-plugins.php-tuf/composer-integration true
+              composer config --no-plugins allow-plugins.phpstan/extension-installer true
+              composer config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
+              composer config --no-plugins allow-plugins.php-http/discovery true
+              echo "📦 Installing composer dependencies (with update to resolve lock conflicts)..."
+              composer update --no-cache --no-interaction --prefer-dist
+              echo "🔧 Ensuring Drush is installed..."
+              if ! composer show drush/drush >/dev/null 2>&1; then
+                echo "⚠️  Drush not found, installing explicitly..."
+                composer require drush/drush --no-cache --no-interaction --prefer-dist
+              else
+                echo "✅ Drush package is already installed"
+              fi
+              echo "🔄 Verifying all packages installed..."
+              composer show | grep -E "(drush|drupal)"
+              echo "🔍 Checking if Drush was installed..."
+              ls -la vendor/bin/ | grep drush || echo "Drush not found in vendor/bin"
+              echo "🔧 Setting file permissions..."
+              chown -R www-data:www-data /opt/drupal
+              find /opt/drupal -type d -exec chmod 755 {} \;
+              find /opt/drupal -type f -exec chmod 644 {} \;
+              echo "🔧 Preserving execute permissions for vendor binaries..."
+              find /opt/drupal/vendor/bin -type f -exec chmod 755 {} \;
+              echo "🔧 Ensuring Drush executable has correct permissions..."
+              find /opt/drupal/vendor -name "drush" -type f -exec chmod 755 {} \;
+              echo "Final verification of Drush installation..."
+              if [ -f "./vendor/bin/drush" ]; then
+                echo "✅ Drush binary found at ./vendor/bin/drush"
+                ./vendor/bin/drush --version
+              else
+                echo "❌ Drush binary not found, checking composer show output..."
+                composer show drush/drush || echo "Drush package not installed"
+              fi
+              echo "Checking database connectivity..."
+              echo "Debug: Testing network connectivity to drupal_db..."
+              ping -c 2 drupal_db || echo "Cannot ping drupal_db container"
+              echo "Debug: Testing port 3306 on drupal_db..."
+              timeout 5 bash -c "</dev/tcp/drupal_db/3306" && echo "Port 3306 accessible" || echo "Port 3306 not accessible"
+              if [ -f "./vendor/bin/drush" ]; then
+                echo "Debug: Testing database connection with drush status..."
+                ./vendor/bin/drush status || echo "Drush status failed"
+                if ./vendor/bin/drush status --format=json 2>/dev/null | grep -q "\"bootstrap\":\"Successful\""; then
+                  echo "✅ Database connection verified"
+                  echo "📊 Importing configuration..."
+                  ./vendor/bin/drush cim -y
+                  echo "🗄️  Running database updates..."
+                  ./vendor/bin/drush updb -y
+                  echo "🧹 Clearing caches..."
+                  ./vendor/bin/drush cr
+                else
+                  echo "⚠️  Database not connected - container may need to be connected to docker_net network"
+                  echo "To fix this, run on your server:"
+                  echo "  docker network connect docker_net homesite"
+                  echo "And ensure your settings.php database host points to the database container name"
+                  echo "Skipping Drupal commands for now..."
+                fi
+              else
+                echo "❌ Drush not found, skipping Drupal commands"
+              fi
               echo "✅ Drupal deployment steps completed successfully"
-            '
+            EOF
             
             echo "--- Restarting container for clean state ---"
             if docker ps --format 'table {{.Names}}' | grep -q '^homesite$'; then
