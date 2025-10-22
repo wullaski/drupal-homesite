@@ -144,8 +144,28 @@ jobs:
               exit 1
             fi
 
+            echo '--- Ensuring container is connected to docker_net network ---'
+            if docker network ls --format '{{.Name}}' | grep -q '^docker_net$'; then
+              echo '✅ docker_net network exists'
+              if docker network inspect docker_net --format '{{range .Containers}}{{.Name}} {{end}}' | grep -q homesite; then
+                echo '✅ homesite is already connected to docker_net'
+              else
+                echo '🔌 Connecting homesite to docker_net network...'
+                docker network connect docker_net homesite
+                echo '✅ homesite connected to docker_net network'
+              fi
+            else
+              echo '⚠️  docker_net network not found - database connectivity may not work'
+              echo 'Available networks:'
+              docker network ls
+            fi
+
             echo '--- Running deployment steps inside container ---'
             docker exec -i homesite timeout 600 bash -c \"
+              export IS_DOCKER_DEPLOYMENT=true && \\
+              export DB_NAME='${{ secrets.DB_NAME }}' && \\
+              export DB_USER='${{ secrets.DB_USER }}' && \\
+              export DB_PASSWORD='${{ secrets.DB_PASSWORD }}' && \\
               cd /opt/drupal && \\
               echo '🔧 Installing system dependencies...' && \\
               apt-get update -qq && apt-get install -y unzip apache2-utils && \\
@@ -189,13 +209,23 @@ jobs:
                 echo '❌ Drush binary not found, checking composer show output...' && \\
                 composer show drush/drush || echo 'Drush package not installed'; \\
               fi && \\
-              echo '📊 Importing configuration...' && \\
+              echo '� Checking database connectivity...' && \\
               if [ -f './vendor/bin/drush' ]; then \\
-                ./vendor/bin/drush cim -y && \\
-                echo '🗄️  Running database updates...' && \\
-                ./vendor/bin/drush updb -y && \\
-                echo '🧹 Clearing caches...' && \\
-                ./vendor/bin/drush cr; \\
+                if ./vendor/bin/drush status --format=json 2>/dev/null | grep -q '\"bootstrap\":\"Successful\"'; then \\
+                  echo '✅ Database connection verified' && \\
+                  echo '📊 Importing configuration...' && \\
+                  ./vendor/bin/drush cim -y && \\
+                  echo '🗄️  Running database updates...' && \\
+                  ./vendor/bin/drush updb -y && \\
+                  echo '🧹 Clearing caches...' && \\
+                  ./vendor/bin/drush cr; \\
+                else \\
+                  echo '⚠️  Database not connected - container may need to be connected to docker_net network' && \\
+                  echo 'To fix this, run on your server:' && \\
+                  echo '  docker network connect docker_net homesite' && \\
+                  echo 'And ensure your settings.php database host points to the database container name' && \\
+                  echo 'Skipping Drupal commands for now...'; \\
+                fi; \\
               else \\
                 echo '❌ Drush not found, skipping Drupal commands'; \\
               fi && \\

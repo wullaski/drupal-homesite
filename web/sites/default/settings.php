@@ -92,6 +92,20 @@
  */
 $databases = [];
 
+// Database configuration for Docker deployment
+if (getenv('IS_DOCKER_DEPLOYMENT') == 'true') {
+  $databases['default']['default'] = [
+    'database' => getenv('DB_NAME') ?: 'drupal',
+    'username' => getenv('DB_USER') ?: 'drupal',
+    'password' => getenv('DB_PASSWORD') ?: 'drupal',
+    'host' => getenv('DB_HOST') ?: 'drupal_db', // Database container name on docker_net
+    'port' => getenv('DB_PORT') ?: '3306',
+    'driver' => 'mysql',
+    'prefix' => '',
+    'collation' => 'utf8mb4_general_ci',
+  ];
+}
+
 /**
  * Customizing database settings.
  *
