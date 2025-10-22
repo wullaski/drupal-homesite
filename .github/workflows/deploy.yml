@@ -4,12 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'web/**'
-      - 'drupal/**'
-      - 'composer.json'
-      - 'composer.lock'
-      - '.github/workflows/deploy.yml'
 
 jobs:
   deploy:
@@ -32,13 +26,11 @@ jobs:
         env:
           TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
         run: |
-          sudo tailscale up --authkey=${TAILSCALE_AUTHKEY} --hostname=github-runner --timeout=30s || true
-          tailscale status || true
+          sudo tailscale up --authkey=${TAILSCALE_AUTHKEY} --hostname=github-runner --timeout=30s
+          tailscale status
 
-      # 4. Test SSH connection
-      - name: Test SSH connection
-        id: sshcheck
-        continue-on-error: true
+      # 4. Prepare SSH connection
+      - name: Setup SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.HOMELAB_SSH_KEY }}
           SSH_USER: ${{ secrets.HOMELAB_SSH_USER }}
@@ -48,67 +40,53 @@ jobs:
           echo "${SSH_PRIVATE_KEY}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
+          echo "✅ SSH key setup complete"
 
-          echo "Testing SSH connectivity..."
-          for i in {1..10}; do
-            if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa $SSH_USER@$SSH_HOST "echo Connected"; then
-              echo "SSH_OK=true" >> $GITHUB_ENV
-              exit 0
-            fi
-            echo "SSH not ready yet, retrying ($i/10)..."
-            sleep 5
-          done
-
-          echo "SSH_OK=false" >> $GITHUB_ENV
-          echo "⚠️ Could not connect to SSH host."
-          exit 0
-
-            # 5. Deploy Drupal site
-      - name: Deploy Drupal via SSH
-        if: success()
+      # 5. Deploy Drupal via SSH + rsync
+      - name: Deploy Drupal
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.HOMELAB_SSH_KEY }}
           SSH_USER: ${{ secrets.HOMELAB_SSH_USER }}
           SSH_HOST: ${{ secrets.HOMELAB_TAILSCALE_IP }}
         run: |
-          mkdir -p ~/.ssh
-          echo "${SSH_PRIVATE_KEY}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
-
           echo "🚀 Deploying Drupal code..."
-          
-          # --- Ensure rsync is installed on the remote host ---
+
+          # Install rsync if missing
           echo "🔧 Checking for rsync on remote host..."
-          ssh -i ~/.ssh/id_rsa $SSH_USER@$SSH_HOST 'command -v rsync >/dev/null 2>&1 || { echo "rsync not found, installing..."; sudo apt-get update -qq && sudo apt-get install -y rsync; }'
-          echo "✅ rsync ready."
+          ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST "command -v rsync >/dev/null 2>&1 || (sudo apt-get update -qq && sudo apt-get install -y rsync)"
 
-          # --- Copy code to remote host ---
+          # Copy updated code to host temp dir
           echo "--- Copying code to host ---"
-          rsync -az --delete -e "ssh -i ~/.ssh/id_rsa" ./ $SSH_USER@$SSH_HOST:/opt/drupal_deploy_tmp/
+          rsync -az --delete --exclude '.git' --exclude '.github' ./ $SSH_USER@$SSH_HOST:/opt/drupal_deploy_tmp
 
-          # --- Run deployment inside container ---
-          echo "--- Running deployment steps inside container ---"
-          ssh -i ~/.ssh/id_rsa $SSH_USER@$SSH_HOST << 'EOF'
+          # Move files into live directory and run deployment
+          ssh $SSH_USER@$SSH_HOST << 'EOF'
             set -e
+            echo "--- Moving code into live Drupal volume ---"
+            sudo rsync -a --delete /opt/drupal_deploy_tmp/ /opt/drupal/
 
-            # Copy files into container's Drupal directory
-            docker exec -i -u root homesite bash -c "rm -rf /var/www/html/* && cp -r /opt/drupal_deploy_tmp/* /var/www/html/ && chown -R www-data:www-data /var/www/html"
+            echo "--- Running deployment steps inside container ---"
+            docker exec -i homesite bash -c "
+              cd /opt/drupal && \
+              apt-get update -qq && apt-get install -y unzip apache2-utils && \
+              composer clear-cache && \
+              composer config --no-plugins allow-plugins.drupal/core-composer-scaffold true && \
+              composer install --no-interaction --prefer-dist --no-dev && \
+              chown -R www-data:www-data /opt/drupal && \
+              find /opt/drupal -type d -exec chmod 755 {} \; && \
+              find /opt/drupal -type f -exec chmod 644 {} \; && \
+              drush cim -y && drush updb -y && drush cr
+            "
 
-            # Install unzip & apache2-utils (for Composer + Drupal tools)
-            docker exec -i -u root homesite bash -c "apt-get update -qq && apt-get install -y unzip apache2-utils"
-
-            # Move into Drupal directory
-            docker exec -i homesite bash -c "cd /opt/drupal && composer clear-cache && composer config --no-plugins allow-plugins.drupal/core-composer-scaffold true && composer install --no-interaction --prefer-dist --no-dev"
-
-            # Run Drush commands as www-data
-            docker exec -i -u www-data homesite bash -c "cd /opt/drupal && drush cim -y && drush updb -y && drush cr"
-
-            echo "✅ Deployment complete."
+            echo "--- Restarting container ---"
+            docker restart homesite
+            echo "✅ Deployment complete and container restarted."
           EOF
 
-
-      # 6. Skip message if offline
-      - name: 💤 Homelab offline, skipping deploy
-        if: env.SSH_OK != 'true'
-        run: echo "Homelab unreachable, skipping deployment safely."
+      # 6. Clean up Tailscale session
+      - name: Disconnect Tailscale
+        if: always()
+        run: |
+          echo "🧹 Cleaning up Tailscale..."
+          sudo tailscale logout || true
+          sudo tailscale down || true
+          echo "✅ Tailscale session ended."
