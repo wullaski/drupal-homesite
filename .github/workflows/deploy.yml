@@ -179,6 +179,8 @@ jobs:
               find /opt/drupal -type f -exec chmod 644 {} \\; && \\
               echo '🔧 Preserving execute permissions for vendor binaries...' && \\
               find /opt/drupal/vendor/bin -type f -exec chmod 755 {} \\; && \\
+              echo '🔧 Ensuring Drush executable has correct permissions...' && \\
+              find /opt/drupal/vendor -name 'drush' -type f -executable -exec chmod 755 {} \\; && \\
               echo '� Final verification of Drush installation...' && \\
               if [ -f './vendor/bin/drush' ]; then \\
                 echo '✅ Drush binary found at ./vendor/bin/drush' && \\
