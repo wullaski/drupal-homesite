@@ -173,7 +173,13 @@ jobs:
               composer show | grep -E '(drush|drupal)' && \\
               echo '🔍 Checking if Drush was installed...' && \\
               ls -la vendor/bin/ | grep drush || echo 'Drush not found in vendor/bin' && \\
-              echo '🔍 Final verification of Drush installation...' && \\
+              echo '� Setting file permissions...' && \\
+              chown -R www-data:www-data /opt/drupal && \\
+              find /opt/drupal -type d -exec chmod 755 {} \\; && \\
+              find /opt/drupal -type f -exec chmod 644 {} \\; && \\
+              echo '🔧 Preserving execute permissions for vendor binaries...' && \\
+              find /opt/drupal/vendor/bin -type f -exec chmod 755 {} \\; && \\
+              echo '� Final verification of Drush installation...' && \\
               if [ -f './vendor/bin/drush' ]; then \\
                 echo '✅ Drush binary found at ./vendor/bin/drush' && \\
                 ./vendor/bin/drush --version; \\
@@ -181,12 +187,6 @@ jobs:
                 echo '❌ Drush binary not found, checking composer show output...' && \\
                 composer show drush/drush || echo 'Drush package not installed'; \\
               fi && \\
-              echo '🔐 Setting file permissions...' && \\
-              chown -R www-data:www-data /opt/drupal && \\
-              find /opt/drupal -type d -exec chmod 755 {} \\; && \\
-              find /opt/drupal -type f -exec chmod 644 {} \\; && \\
-              echo '🔧 Preserving execute permissions for vendor binaries...' && \\
-              find /opt/drupal/vendor/bin -type f -exec chmod 755 {} \\; && \\
               echo '📊 Importing configuration...' && \\
               if [ -f './vendor/bin/drush' ]; then \\
                 ./vendor/bin/drush cim -y && \\
