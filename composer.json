@@ -34,7 +34,9 @@
             "drupal/core-project-message": true,
             "phpstan/extension-installer": true,
             "dealerdirect/phpcodesniffer-composer-installer": true,
-            "php-http/discovery": true
+            "php-http/discovery": true,
+            "php-tuf/composer-integration": true,
+            "drush/drush": true
         },
         "sort-packages": true
     },

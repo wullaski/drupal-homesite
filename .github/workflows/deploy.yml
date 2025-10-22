@@ -127,11 +127,21 @@ jobs:
             '
             rm -rf /home/$SSH_USER/drupal_deploy_tmp
 
-            echo '--- Checking if container is running ---'
-            if ! docker ps | grep -q homesite; then
-              echo '⚠️  Container homesite not running, attempting to start...'
-              docker start homesite || true
-              sleep 5
+            echo '--- Checking if container exists and is running ---'
+            if docker ps -a --format 'table {{.Names}}' | grep -q '^homesite$'; then
+              echo '✅ Container homesite exists'
+              if ! docker ps --format 'table {{.Names}}' | grep -q '^homesite$'; then
+                echo '⚠️  Container homesite not running, starting...'
+                docker start homesite
+                sleep 5
+              else
+                echo '✅ Container homesite is already running'
+              fi
+            else
+              echo '❌ Container homesite does not exist'
+              echo 'Available containers:'
+              docker ps -a
+              exit 1
             fi
 
             echo '--- Running deployment steps inside container ---'
@@ -146,14 +156,24 @@ jobs:
               composer config --no-plugins allow-plugins.drush/drush true && \\
               composer config --no-plugins allow-plugins.composer/installers true && \\
               composer config --no-plugins allow-plugins.drupal/core-project-message true && \\
-              echo '📦 Installing composer dependencies...' && \\
-              composer install --no-cache --no-interaction --prefer-dist && \\
+              composer config --no-plugins allow-plugins.php-tuf/composer-integration true && \\
+              composer config --no-plugins allow-plugins.phpstan/extension-installer true && \\
+              composer config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true && \\
+              composer config --no-plugins allow-plugins.php-http/discovery true && \\
+              echo '📦 Installing composer dependencies (with update to resolve lock conflicts)...' && \\
+              composer update --no-cache --no-interaction --prefer-dist && \\
               echo '🔄 Verifying all packages installed...' && \\
               composer show | grep -E '(drush|drupal)' && \\
               echo '🔍 Checking if Drush was installed...' && \\
               ls -la vendor/bin/ | grep drush || echo 'Drush not found in vendor/bin' && \\
-              echo '🔍 Checking composer.json contents...' && \\
-              grep -A5 -B5 drush composer.json || echo 'No drush found in composer.json' && \\
+              echo '🔍 Final verification of Drush installation...' && \\
+              if [ -f './vendor/bin/drush' ]; then \\
+                echo '✅ Drush binary found at ./vendor/bin/drush' && \\
+                ./vendor/bin/drush --version; \\
+              else \\
+                echo '❌ Drush binary not found, checking composer show output...' && \\
+                composer show drush/drush || echo 'Drush package not installed'; \\
+              fi && \\
               echo '🔐 Setting file permissions...' && \\
               chown -R www-data:www-data /opt/drupal && \\
               find /opt/drupal -type d -exec chmod 755 {} \\; && \\
@@ -172,7 +192,11 @@ jobs:
             \""
 
             echo '--- Restarting container for clean state ---'
-            docker restart homesite
+            if docker ps --format 'table {{.Names}}' | grep -q '^homesite$'; then
+              docker restart homesite
+            else
+              echo '⚠️  Container homesite not running, skipping restart'
+            fi
             
             echo '--- Waiting for container to be ready ---'
             sleep 10
