@@ -161,7 +161,10 @@ jobs:
             fi
 
             echo '--- Running deployment steps inside container ---'
-            docker exec -i -e IS_DOCKER_DEPLOYMENT=true -e DB_NAME='${{ secrets.DB_NAME }}' -e DB_USER='${{ secrets.DB_USER }}' -e DB_PASSWORD='${{ secrets.DB_PASSWORD }}' homesite timeout 600 bash -c \"
+            export DOCKER_DB_NAME='${{ secrets.DB_NAME }}'
+            export DOCKER_DB_USER='${{ secrets.DB_USER }}'
+            export DOCKER_DB_PASSWORD='${{ secrets.DB_PASSWORD }}'
+            docker exec -i -e IS_DOCKER_DEPLOYMENT=true -e DB_NAME=\"\$DOCKER_DB_NAME\" -e DB_USER=\"\$DOCKER_DB_USER\" -e DB_PASSWORD=\"\$DOCKER_DB_PASSWORD\" homesite timeout 600 bash -c \"
               echo 'Debug: Environment variables set:' && \\
               echo '  IS_DOCKER_DEPLOYMENT=' \$IS_DOCKER_DEPLOYMENT && \\
               echo '  DB_NAME=' \$DB_NAME && \\
