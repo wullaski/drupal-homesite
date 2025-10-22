@@ -85,6 +85,9 @@ jobs:
         env:
           SSH_USER: ${{ secrets.HOMELAB_SSH_USER }}
           SSH_HOST: ${{ secrets.HOMELAB_TAILSCALE_IP }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
         timeout-minutes: 15
         run: |
           echo "🚀 Deploying Drupal code..."
@@ -161,10 +164,7 @@ jobs:
             fi
 
             echo '--- Running deployment steps inside container ---'
-            export DOCKER_DB_NAME='${{ secrets.DB_NAME }}'
-            export DOCKER_DB_USER='${{ secrets.DB_USER }}'
-            export DOCKER_DB_PASSWORD='${{ secrets.DB_PASSWORD }}'
-            docker exec -i -e IS_DOCKER_DEPLOYMENT=true -e DB_NAME=\"\$DOCKER_DB_NAME\" -e DB_USER=\"\$DOCKER_DB_USER\" -e DB_PASSWORD=\"\$DOCKER_DB_PASSWORD\" homesite timeout 600 bash -c \"
+            docker exec -i -e IS_DOCKER_DEPLOYMENT=true -e DB_NAME=\"$DB_NAME\" -e DB_USER=\"$DB_USER\" -e DB_PASSWORD=\"$DB_PASSWORD\" homesite timeout 600 bash -c \"
               echo 'Debug: Environment variables set:' && \\
               echo '  IS_DOCKER_DEPLOYMENT=' \$IS_DOCKER_DEPLOYMENT && \\
               echo '  DB_NAME=' \$DB_NAME && \\
