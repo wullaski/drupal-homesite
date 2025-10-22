@@ -14,15 +14,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-                echo '🔌 Checking database connectivity...' && \\
-              echo 'Debug: Testing network connectivity to drupal_db...' && \\
-              ping -c 2 drupal_db || echo 'Cannot ping drupal_db container' && \\
-              echo 'Debug: Testing port 3306 on drupal_db...' && \\
-              timeout 5 bash -c '</dev/tcp/drupal_db/3306' && echo 'Port 3306 accessible' || echo 'Port 3306 not accessible' && \\
-              if [ -f './vendor/bin/drush' ]; then \\
-                echo 'Debug: Testing database connection with drush status...' && \\
-                ./vendor/bin/drush status || echo 'Drush status failed' && \\
-                if ./vendor/bin/drush status --format=json 2>/dev/null | grep -q '\"bootstrap\":\"Successful\"'; then \\ # 2. Install Tailscale
+      # 2. Install Tailscale
       - name: Install Tailscale
         run: |
           curl -fsSL https://tailscale.com/install.sh | sh
