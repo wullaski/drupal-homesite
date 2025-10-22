@@ -14,7 +14,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Install Tailscale
+                echo '🔌 Checking database connectivity...' && \\
+              echo 'Debug: Testing network connectivity to drupal_db...' && \\
+              ping -c 2 drupal_db || echo 'Cannot ping drupal_db container' && \\
+              echo 'Debug: Testing port 3306 on drupal_db...' && \\
+              timeout 5 bash -c '</dev/tcp/drupal_db/3306' && echo 'Port 3306 accessible' || echo 'Port 3306 not accessible' && \\
+              if [ -f './vendor/bin/drush' ]; then \\
+                echo 'Debug: Testing database connection with drush status...' && \\
+                ./vendor/bin/drush status || echo 'Drush status failed' && \\
+                if ./vendor/bin/drush status --format=json 2>/dev/null | grep -q '\"bootstrap\":\"Successful\"'; then \\ # 2. Install Tailscale
       - name: Install Tailscale
         run: |
           curl -fsSL https://tailscale.com/install.sh | sh
@@ -166,6 +174,11 @@ jobs:
               export DB_NAME='${{ secrets.DB_NAME }}' && \\
               export DB_USER='${{ secrets.DB_USER }}' && \\
               export DB_PASSWORD='${{ secrets.DB_PASSWORD }}' && \\
+              echo 'Debug: Environment variables set:' && \\
+              echo '  IS_DOCKER_DEPLOYMENT=' \$IS_DOCKER_DEPLOYMENT && \\
+              echo '  DB_NAME=' \$DB_NAME && \\
+              echo '  DB_USER=' \$DB_USER && \\
+              echo '  DB_HOST will default to: drupal_db' && \\
               cd /opt/drupal && \\
               echo '🔧 Installing system dependencies...' && \\
               apt-get update -qq && apt-get install -y unzip apache2-utils && \\
