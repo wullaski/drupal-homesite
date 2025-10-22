@@ -80,58 +80,52 @@ jobs:
           
           echo "✅ SSH key setup complete"
 
-      # 5. Deploy Drupal via SSH + rsync
+      # 5. Copy code to host
+      - name: Copy Drupal code
+        timeout-minutes: 5
+        run: |
+          echo "🚀 Copying Drupal code to homelab..."
+          rsync -az --timeout=300 --delete --exclude '.git' --exclude '.github' ./ ${{ secrets.HOMELAB_SSH_USER }}@${{ secrets.HOMELAB_TAILSCALE_IP }}:/home/${{ secrets.HOMELAB_SSH_USER }}/drupal_deploy_tmp
+
+      # 6. Deploy Drupal via SSH action
       - name: Deploy Drupal
+        uses: appleboy/ssh-action@v1.0.3
         env:
-          SSH_USER: ${{ secrets.HOMELAB_SSH_USER }}
-          SSH_HOST: ${{ secrets.HOMELAB_TAILSCALE_IP }}
           DB_NAME: ${{ secrets.DB_NAME }}
           DB_USER: ${{ secrets.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-        timeout-minutes: 15
-        run: |
-          echo "🚀 Deploying Drupal code..."
+        with:
+          host: ${{ secrets.HOMELAB_TAILSCALE_IP }}
+          username: ${{ secrets.HOMELAB_SSH_USER }}
+          key: ${{ secrets.HOMELAB_SSH_KEY }}
+          timeout: 15m
+          envs: DB_NAME,DB_USER,DB_PASSWORD
 
-          # Install rsync if missing (using docker if needed)
-          echo "🔧 Checking for rsync on remote host..."
-          ssh -o ConnectTimeout=30 -o ServerAliveInterval=10 $SSH_USER@$SSH_HOST "
-            if ! command -v rsync >/dev/null 2>&1; then
-              echo '⚠️  rsync not found, using docker to provide rsync functionality'
-              echo 'Note: If you need system rsync, install it manually with: sudo apt-get install -y rsync'
-            else
-              echo '✅ rsync is available'
-            fi
-          "
-
-          # Copy updated code to host temp dir
-          echo "--- Copying code to host ---"
-          rsync -az --timeout=300 --delete --exclude '.git' --exclude '.github' ./ $SSH_USER@$SSH_HOST:/home/$SSH_USER/drupal_deploy_tmp
-
-          # Move files into live directory and run deployment
-          echo "--- Starting remote deployment ---"
-          ssh -o ConnectTimeout=30 -o ServerAliveInterval=10 $SSH_USER@$SSH_HOST "
+          script: |
             set -e
-            export DB_NAME='$DB_NAME'
-            export DB_USER='$DB_USER'
-            export DB_PASSWORD='$DB_PASSWORD'
+            echo "🚀 Starting Drupal deployment..."
+            echo "DB_NAME: $DB_NAME"
+            echo "DB_USER: $DB_USER"
+            echo "DB_PASSWORD: [REDACTED]"
+            
             echo '--- Testing docker access ---'
             if docker ps >/dev/null 2>&1; then
               echo '✅ Docker access confirmed'
             else
               echo '❌ This script requires docker access for the SSH user'
               echo 'Please run this command on your server to add the user to docker group:'
-              echo '  sudo usermod -aG docker $SSH_USER'
+              echo '  sudo usermod -aG docker $USER'
               echo 'Then logout and login again, or run: newgrp docker'
               exit 1
             fi
             
             echo '--- Moving code into live Drupal volume ---'
             # Use docker to copy files with proper permissions
-            docker run --rm -v /home/$SSH_USER/drupal_deploy_tmp:/source -v /opt/drupal:/dest alpine sh -c '
+            docker run --rm -v /home/$USER/drupal_deploy_tmp:/source -v /opt/drupal:/dest alpine sh -c '
               rm -rf /dest/* /dest/.[^.]* 2>/dev/null || true
               cp -a /source/. /dest/
             '
-            rm -rf /home/$SSH_USER/drupal_deploy_tmp
+            rm -rf /home/$USER/drupal_deploy_tmp
 
             echo '--- Checking if container exists and is running ---'
             if docker ps -a --format 'table {{.Names}}' | grep -q '^homesite$'; then
@@ -167,26 +161,26 @@ jobs:
             fi
 
             echo '--- Running deployment steps inside container ---'
-            docker exec -i -e IS_DOCKER_DEPLOYMENT=true -e DB_NAME=\"\$DB_NAME\" -e DB_USER=\"\$DB_USER\" -e DB_PASSWORD=\"\$DB_PASSWORD\" homesite timeout 600 bash -c \"
-              echo 'Debug: Environment variables set:' && \\
-              echo '  IS_DOCKER_DEPLOYMENT=' \$IS_DOCKER_DEPLOYMENT && \\
-              echo '  DB_NAME=' \$DB_NAME && \\
-              echo '  DB_USER=' \$DB_USER && \\
-              echo '  DB_HOST will default to: drupal_db' && \\
-              cd /opt/drupal && \\
-              echo '🔧 Installing system dependencies...' && \\
-              apt-get update -qq && apt-get install -y unzip apache2-utils && \\
-              echo '🧹 Clearing composer cache...' && \\
-              composer clear-cache && \\
-              echo '⚙️  Configuring composer plugins...' && \\
-              composer config --no-plugins allow-plugins.drupal/core-composer-scaffold true && \\
-              composer config --no-plugins allow-plugins.drush/drush true && \\
-              composer config --no-plugins allow-plugins.composer/installers true && \\
-              composer config --no-plugins allow-plugins.drupal/core-project-message true && \\
-              composer config --no-plugins allow-plugins.php-tuf/composer-integration true && \\
-              composer config --no-plugins allow-plugins.phpstan/extension-installer true && \\
-              composer config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true && \\
-              composer config --no-plugins allow-plugins.php-http/discovery true && \\
+            docker exec -i -e IS_DOCKER_DEPLOYMENT=true -e DB_NAME="$DB_NAME" -e DB_USER="$DB_USER" -e DB_PASSWORD="$DB_PASSWORD" homesite timeout 600 bash -c '
+              echo "Debug: Environment variables set:" && \
+              echo "  IS_DOCKER_DEPLOYMENT=" $IS_DOCKER_DEPLOYMENT && \
+              echo "  DB_NAME=" $DB_NAME && \
+              echo "  DB_USER=" $DB_USER && \
+              echo "  DB_HOST will default to: drupal_db" && \
+              cd /opt/drupal && \
+              echo "🔧 Installing system dependencies..." && \
+              apt-get update -qq && apt-get install -y unzip apache2-utils && \
+              echo "🧹 Clearing composer cache..." && \
+              composer clear-cache && \
+              echo "⚙️  Configuring composer plugins..." && \
+              composer config --no-plugins allow-plugins.drupal/core-composer-scaffold true && \
+              composer config --no-plugins allow-plugins.drush/drush true && \
+              composer config --no-plugins allow-plugins.composer/installers true && \
+              composer config --no-plugins allow-plugins.drupal/core-project-message true && \
+              composer config --no-plugins allow-plugins.php-tuf/composer-integration true && \
+              composer config --no-plugins allow-plugins.phpstan/extension-installer true && \
+              composer config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true && \
+              composer config --no-plugins allow-plugins.php-http/discovery true && \
               echo '📦 Installing composer dependencies (with update to resolve lock conflicts)...' && \\
               composer update --no-cache --no-interaction --prefer-dist && \\
               echo '🔧 Ensuring Drush is installed...' && \\
@@ -242,32 +236,31 @@ jobs:
               else \\
                 echo '❌ Drush not found, skipping Drupal commands'; \\
               fi && \\
-              echo '✅ Drupal deployment steps completed successfully'
-            \""
-
-            echo '--- Restarting container for clean state ---'
+              echo "✅ Drupal deployment steps completed successfully"
+            '
+            
+            echo "--- Restarting container for clean state ---"
             if docker ps --format 'table {{.Names}}' | grep -q '^homesite$'; then
-              echo '🔄 Restarting container homesite...'
+              echo "🔄 Restarting container homesite..."
               docker restart homesite
-              echo '✅ Container restarted successfully'
+              echo "✅ Container restarted successfully"
             else
-              echo '⚠️  Container homesite not running, attempting to start...'
-              docker start homesite || echo '❌ Failed to start container'
+              echo "⚠️  Container homesite not running, attempting to start..."
+              docker start homesite || echo "❌ Failed to start container"
             fi
             
-            echo '--- Waiting for container to be ready ---'
+            echo "--- Waiting for container to be ready ---"
             sleep 10
             for i in {1..30}; do
               if docker ps | grep -q homesite && docker exec homesite curl -f http://localhost >/dev/null 2>&1; then
-                echo '✅ Container is healthy and responding'
+                echo "✅ Container is healthy and responding"
                 break
               fi
-              echo '⏳ Waiting for container to be ready... (\$i/30)'
+              echo "⏳ Waiting for container to be ready... ($i/30)"
               sleep 2
             done
             
-            echo '✅ Deployment complete and container restarted.'
-          "
+            echo "✅ Deployment complete and container restarted."
 
       # 6. Clean up Tailscale session
       - name: Disconnect Tailscale
