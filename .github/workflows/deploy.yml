@@ -150,11 +150,11 @@ jobs:
               find /opt/drupal -type d -exec chmod 755 {} \\; && \\
               find /opt/drupal -type f -exec chmod 644 {} \\; && \\
               echo '📊 Importing configuration...' && \\
-              drush cim -y && \\
+              ./vendor/bin/drush cim -y && \\
               echo '🗄️  Running database updates...' && \\
-              drush updb -y && \\
+              ./vendor/bin/drush updb -y && \\
               echo '🧹 Clearing caches...' && \\
-              drush cr && \\
+              ./vendor/bin/drush cr && \\
               echo '✅ Drupal deployment steps completed successfully'
             \"
 
