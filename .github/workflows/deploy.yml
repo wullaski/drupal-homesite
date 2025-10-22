@@ -111,6 +111,9 @@ jobs:
           echo "--- Starting remote deployment ---"
           ssh -o ConnectTimeout=30 -o ServerAliveInterval=10 $SSH_USER@$SSH_HOST "
             set -e
+            export DB_NAME='$DB_NAME'
+            export DB_USER='$DB_USER'
+            export DB_PASSWORD='$DB_PASSWORD'
             echo '--- Testing docker access ---'
             if docker ps >/dev/null 2>&1; then
               echo '✅ Docker access confirmed'
@@ -164,7 +167,7 @@ jobs:
             fi
 
             echo '--- Running deployment steps inside container ---'
-            docker exec -i -e IS_DOCKER_DEPLOYMENT=true -e DB_NAME=\"$DB_NAME\" -e DB_USER=\"$DB_USER\" -e DB_PASSWORD=\"$DB_PASSWORD\" homesite timeout 600 bash -c \"
+            docker exec -i -e IS_DOCKER_DEPLOYMENT=true -e DB_NAME=\"\$DB_NAME\" -e DB_USER=\"\$DB_USER\" -e DB_PASSWORD=\"\$DB_PASSWORD\" homesite timeout 600 bash -c \"
               echo 'Debug: Environment variables set:' && \\
               echo '  IS_DOCKER_DEPLOYMENT=' \$IS_DOCKER_DEPLOYMENT && \\
               echo '  DB_NAME=' \$DB_NAME && \\
