@@ -302,14 +302,10 @@ jobs:
                     chmod 755 /opt/drupal/web/sites/default
                     chmod 644 /opt/drupal/web/sites/default/settings.php
                   else
-                    echo "❌ No Drupal tables found - site needs fresh installation"
-                    echo "🚀 Installing Drupal from scratch..."
-                    ./vendor/bin/drush site-install standard \
-                      --db-url="mysql://$DB_USER:$DB_PASSWORD@$DB_HOST:3306/$DB_NAME" \
-                      --site-name="Drupal Homesite" \
-                      --account-name=admin \
-                      --account-pass=admin \
-                      --yes
+                    echo "❌ No Drupal tables found - database appears empty"
+                    echo "⚠️  Manual intervention may be required"
+                    echo "💡 Consider restoring from backup or running fresh installation manually"
+                    echo "🚫 Skipping automatic installation to prevent data loss"
                   fi
                 fi
               else
