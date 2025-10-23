@@ -124,6 +124,24 @@ if ($is_docker === 'true') {
     'prefix' => '',
     'collation' => 'utf8mb4_general_ci',
   ];
+  
+  // Force Drupal to recognize site is already installed when database has content
+  if (!empty($databases['default']['default'])) {
+    try {
+      $pdo = new PDO(
+        "mysql:host={$databases['default']['default']['host']};port={$databases['default']['default']['port']};dbname={$databases['default']['default']['database']}",
+        $databases['default']['default']['username'],
+        $databases['default']['default']['password']
+      );
+      $result = $pdo->query("SHOW TABLES LIKE 'users_field_data'");
+      if ($result && $result->rowCount() > 0) {
+        $settings['install_profile'] = 'standard';
+        $config_directories = array();
+      }
+    } catch (Exception $e) {
+      // If connection fails, let Drupal handle it normally
+    }
+  }
 }
 
 /**
