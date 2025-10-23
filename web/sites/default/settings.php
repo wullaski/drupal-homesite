@@ -92,14 +92,34 @@
  */
 $databases = [];
 
+// Function to load environment variables from .env file if not set
+function loadEnvIfNotSet($key, $default = null) {
+  $value = getenv($key);
+  if ($value === false || $value === '') {
+    // Try to load from .env file
+    $env_file = __DIR__ . '/../../.env';
+    if (file_exists($env_file)) {
+      $lines = file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+      foreach ($lines as $line) {
+        if (strpos($line, $key . '=') === 0) {
+          $value = substr($line, strlen($key) + 1);
+          break;
+        }
+      }
+    }
+  }
+  return $value ?: $default;
+}
+
 // Database configuration for Docker deployment
-if (getenv('IS_DOCKER_DEPLOYMENT') == 'true') {
+$is_docker = loadEnvIfNotSet('IS_DOCKER_DEPLOYMENT');
+if ($is_docker === 'true') {
   $databases['default']['default'] = [
-    'database' => getenv('DB_NAME') ?: 'drupal',
-    'username' => getenv('DB_USER') ?: 'drupal',
-    'password' => getenv('DB_PASSWORD') ?: 'drupal',
-    'host' => getenv('DB_HOST') ?: 'drupal_db', // Database container name on docker_net
-    'port' => getenv('DB_PORT') ?: '3306',
+    'database' => loadEnvIfNotSet('DB_NAME', 'drupal'),
+    'username' => loadEnvIfNotSet('DB_USER', 'drupal'),
+    'password' => loadEnvIfNotSet('DB_PASSWORD', 'drupal'),
+    'host' => loadEnvIfNotSet('DB_HOST', 'drupal_db'), // Database container name on docker_net
+    'port' => loadEnvIfNotSet('DB_PORT', '3306'),
     'driver' => 'mysql',
     'prefix' => '',
     'collation' => 'utf8mb4_general_ci',
