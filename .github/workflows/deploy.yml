@@ -281,6 +281,9 @@ jobs:
                   ./vendor/bin/drush updb -y
                   echo "🧹 Clearing caches..."
                   ./vendor/bin/drush cr
+                  echo "🎨 Configuring custom theme..."
+                  ./vendor/bin/drush theme:enable simplesmart || echo "Theme enable failed"
+                  ./vendor/bin/drush config:set system.theme default simplesmart -y || echo "Theme set failed"
                 else
                   echo "⚠️  Drupal not bootstrapping - checking if site needs installation"
                   
@@ -301,6 +304,10 @@ jobs:
                     chown -R www-data:www-data /opt/drupal/web/sites/default/files
                     chmod 755 /opt/drupal/web/sites/default
                     chmod 644 /opt/drupal/web/sites/default/settings.php
+                    
+                    echo "🎨 Ensuring custom theme is enabled and active..."
+                    ./vendor/bin/drush theme:enable simplesmart || echo "Theme enable failed"
+                    ./vendor/bin/drush config:set system.theme default simplesmart -y || echo "Theme set failed"
                   else
                     echo "❌ No Drupal tables found - database appears empty"
                     echo "⚠️  Manual intervention may be required"
