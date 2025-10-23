@@ -340,7 +340,7 @@ if ($is_docker === 'true') {
  *   $settings['hash_salt'] = file_get_contents('/home/example/salt.txt');
  * @endcode
  */
-$settings['hash_salt'] = '';
+$settings['hash_salt'] = loadEnvIfNotSet('DRUPAL_HASH_SALT', '');
 
 /**
  * Deployment identifier.

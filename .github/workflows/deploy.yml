@@ -183,6 +183,14 @@ jobs:
               
               echo "🔧 Setting up persistent environment variables for Apache..."
               
+              # Generate a secure hash salt if it doesn't exist
+              if [ ! -f /opt/drupal/.hash_salt ]; then
+                echo "🔐 Generating secure hash salt..."
+                openssl rand -hex 64 > /opt/drupal/.hash_salt
+                echo "✅ Hash salt generated and saved"
+              fi
+              HASH_SALT=$(cat /opt/drupal/.hash_salt)
+              
               # Method 1: Add to Apache envvars file (most reliable for Drupal containers)
               echo "export IS_DOCKER_DEPLOYMENT=true" >> /etc/apache2/envvars
               echo "export DB_NAME=$DB_NAME" >> /etc/apache2/envvars
@@ -190,6 +198,7 @@ jobs:
               echo "export DB_PASSWORD=$DB_PASSWORD" >> /etc/apache2/envvars
               echo "export DB_HOST=drupal_db" >> /etc/apache2/envvars
               echo "export DB_PORT=3306" >> /etc/apache2/envvars
+              echo "export DRUPAL_HASH_SALT=$HASH_SALT" >> /etc/apache2/envvars
               
               # Method 2: Add to PHP-FPM pool configuration if it exists
               if [ -f /etc/php/*/fpm/pool.d/www.conf ]; then
@@ -200,6 +209,7 @@ jobs:
                   echo "env[DB_PASSWORD] = $DB_PASSWORD" >> "$pool_file"
                   echo "env[DB_HOST] = drupal_db" >> "$pool_file"
                   echo "env[DB_PORT] = 3306" >> "$pool_file"
+                  echo "env[DRUPAL_HASH_SALT] = $HASH_SALT" >> "$pool_file"
                 done
               fi
               
@@ -211,6 +221,7 @@ jobs:
               echo "SetEnv DB_PASSWORD \"$DB_PASSWORD\"" >> /etc/apache2/conf-available/drupal-env.conf
               echo 'SetEnv DB_HOST "drupal_db"' >> /etc/apache2/conf-available/drupal-env.conf
               echo 'SetEnv DB_PORT "3306"' >> /etc/apache2/conf-available/drupal-env.conf
+              echo "SetEnv DRUPAL_HASH_SALT \"$HASH_SALT\"" >> /etc/apache2/conf-available/drupal-env.conf
               # Enable the configuration
               a2enconf drupal-env || echo "a2enconf not available"
               
@@ -219,6 +230,7 @@ jobs:
               echo "DB_NAME=$DB_NAME" >> /opt/drupal/.env
               echo "DB_USER=$DB_USER" >> /opt/drupal/.env
               echo "DB_PASSWORD=$DB_PASSWORD" >> /opt/drupal/.env
+              echo "DRUPAL_HASH_SALT=$HASH_SALT" >> /opt/drupal/.env
               echo "DB_HOST=drupal_db" >> /opt/drupal/.env
               echo "DB_PORT=3306" >> /opt/drupal/.env
               
@@ -229,6 +241,7 @@ jobs:
               echo "DB_PASSWORD=$DB_PASSWORD" >> /etc/environment
               echo "DB_HOST=drupal_db" >> /etc/environment
               echo "DB_PORT=3306" >> /etc/environment
+              echo "DRUPAL_HASH_SALT=$HASH_SALT" >> /etc/environment
               
               echo "✅ Environment variables configured for persistence"
               
