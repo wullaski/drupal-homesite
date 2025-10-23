@@ -271,8 +271,10 @@ jobs:
               if [ -f "./vendor/bin/drush" ]; then
                 echo "Debug: Testing database connection with drush status..."
                 ./vendor/bin/drush status || echo "Drush status failed"
+                
+                # Check if Drupal is installed
                 if ./vendor/bin/drush status --format=json 2>/dev/null | grep -q "\"bootstrap\":\"Successful\""; then
-                  echo "✅ Database connection verified"
+                  echo "✅ Database connection verified - Drupal is properly installed"
                   echo "📊 Importing configuration..."
                   ./vendor/bin/drush cim -y
                   echo "🗄️  Running database updates..."
@@ -280,11 +282,35 @@ jobs:
                   echo "🧹 Clearing caches..."
                   ./vendor/bin/drush cr
                 else
-                  echo "⚠️  Database not connected - container may need to be connected to docker_net network"
-                  echo "To fix this, run on your server:"
-                  echo "  docker network connect docker_net homesite"
-                  echo "And ensure your settings.php database host points to the database container name"
-                  echo "Skipping Drupal commands for now..."
+                  echo "⚠️  Drupal not bootstrapping - checking if site needs installation"
+                  
+                  # Check if database has Drupal tables
+                  if ./vendor/bin/drush sql-query "SHOW TABLES LIKE 'users'" 2>/dev/null | grep -q users; then
+                    echo "✅ Drupal tables exist - site should be installed"
+                    echo "🔧 Trying to rebuild and clear all caches..."
+                    ./vendor/bin/drush cr || echo "Cache clear failed"
+                    ./vendor/bin/drush status || echo "Status check still failing"
+                    
+                    # Try to force cache rebuild
+                    echo "🔧 Forcing cache rebuild..."
+                    rm -rf /opt/drupal/web/sites/default/files/php/twig/* 2>/dev/null || true
+                    rm -rf /opt/drupal/web/sites/default/files/css/* 2>/dev/null || true  
+                    rm -rf /opt/drupal/web/sites/default/files/js/* 2>/dev/null || true
+                    
+                    echo "🔧 Setting proper file permissions for Drupal..."
+                    chown -R www-data:www-data /opt/drupal/web/sites/default/files
+                    chmod 755 /opt/drupal/web/sites/default
+                    chmod 644 /opt/drupal/web/sites/default/settings.php
+                  else
+                    echo "❌ No Drupal tables found - site needs fresh installation"
+                    echo "🚀 Installing Drupal from scratch..."
+                    ./vendor/bin/drush site-install standard \
+                      --db-url="mysql://$DB_USER:$DB_PASSWORD@$DB_HOST:3306/$DB_NAME" \
+                      --site-name="Drupal Homesite" \
+                      --account-name=admin \
+                      --account-pass=admin \
+                      --yes
+                  fi
                 fi
               else
                 echo "❌ Drush not found, skipping Drupal commands"
