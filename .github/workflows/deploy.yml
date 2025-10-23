@@ -168,6 +168,42 @@ jobs:
               echo "  DB_NAME=$DB_NAME"
               echo "  DB_USER=$DB_USER"
               echo "  DB_HOST will default to: drupal_db"
+              
+              echo "🔧 Setting up persistent environment variables for Apache..."
+              # Create environment file for Apache
+              cat > /etc/apache2/envvars.d/drupal-db.conf << ENVEOF
+              export IS_DOCKER_DEPLOYMENT=true
+              export DB_NAME=$DB_NAME
+              export DB_USER=$DB_USER
+              export DB_PASSWORD=$DB_PASSWORD
+              export DB_HOST=drupal_db
+              export DB_PORT=3306
+              ENVEOF
+              
+              # Also set up environment variables for systemd (if used)
+              mkdir -p /etc/systemd/system/apache2.service.d
+              cat > /etc/systemd/system/apache2.service.d/drupal-env.conf << SYSTEMDEOF
+              [Service]
+              Environment="IS_DOCKER_DEPLOYMENT=true"
+              Environment="DB_NAME=$DB_NAME"
+              Environment="DB_USER=$DB_USER"
+              Environment="DB_PASSWORD=$DB_PASSWORD"
+              Environment="DB_HOST=drupal_db"
+              Environment="DB_PORT=3306"
+              SYSTEMDEOF
+                            
+              # Create .env file in Drupal root as backup
+              cat > /opt/drupal/.env << DOTENVEOF
+              IS_DOCKER_DEPLOYMENT=true
+              DB_NAME=$DB_NAME
+              DB_USER=$DB_USER
+              DB_PASSWORD=$DB_PASSWORD
+              DB_HOST=drupal_db
+              DB_PORT=3306
+              DOTENVEOF
+              
+              echo "✅ Environment variables configured for persistence"
+              
               cd /opt/drupal
               echo "🔧 Installing system dependencies..."
               apt-get update -qq && apt-get install -y unzip apache2-utils
@@ -240,8 +276,10 @@ jobs:
               echo "✅ Drupal deployment steps completed successfully"
             EOF
             
-            echo "--- Restarting container for clean state ---"
+            echo "--- Reloading Apache configuration and restarting container ---"
             if docker ps --format 'table {{.Names}}' | grep -q '^homesite$'; then
+              echo "🔄 Reloading Apache configuration inside container..."
+              docker exec homesite bash -c "service apache2 reload || systemctl reload apache2 || true"
               echo "🔄 Restarting container homesite..."
               docker restart homesite
               echo "✅ Container restarted successfully"
