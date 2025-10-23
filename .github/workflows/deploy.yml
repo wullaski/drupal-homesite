@@ -123,7 +123,19 @@ jobs:
             # Use docker to copy files with proper permissions
             docker run --rm -v /home/$USER/drupal_deploy_tmp:/source -v /opt/drupal:/dest alpine sh -c '
               rm -rf /dest/* /dest/.[^.]* 2>/dev/null || true
-              cp -a /source/. /dest/
+              # Copy composer files to root
+              cp -a /source/composer.* /dest/ 2>/dev/null || true
+              cp -a /source/README.md /dest/ 2>/dev/null || true
+              cp -a /source/.env* /dest/ 2>/dev/null || true
+              # Copy web directory contents to dest/web (not dest/web/web)
+              if [ -d /source/web ]; then
+                mkdir -p /dest/web
+                cp -a /source/web/. /dest/web/
+              fi
+              # Copy vendor if it exists
+              if [ -d /source/vendor ]; then
+                cp -a /source/vendor /dest/
+              fi
             '
             rm -rf /home/$USER/drupal_deploy_tmp
 
