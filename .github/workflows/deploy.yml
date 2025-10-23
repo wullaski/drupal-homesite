@@ -127,10 +127,10 @@ jobs:
               cp -a /source/composer.* /dest/ 2>/dev/null || true
               cp -a /source/README.md /dest/ 2>/dev/null || true
               cp -a /source/.env* /dest/ 2>/dev/null || true
-              # Copy web directory contents to dest/web (not dest/web/web)
+              # Copy web directory contents directly to dest root (not dest/web)
               if [ -d /source/web ]; then
-                mkdir -p /dest/web
-                cp -a /source/web/. /dest/web/
+                echo "Copying web directory contents to Drupal root..."
+                cp -a /source/web/. /dest/
               fi
               # Copy vendor if it exists
               if [ -d /source/vendor ]; then
