@@ -193,18 +193,12 @@ jobs:
               
               # Method 3: Add to Apache virtual host environment (if mod_env is available)
               mkdir -p /etc/apache2/conf-available
-              cat > /etc/apache2/conf-available/drupal-env.conf << 'ENVCONF'
-SetEnv IS_DOCKER_DEPLOYMENT "true"
-SetEnv DB_NAME "__DB_NAME__"
-SetEnv DB_USER "__DB_USER__"
-SetEnv DB_PASSWORD "__DB_PASSWORD__"
-SetEnv DB_HOST "drupal_db"
-SetEnv DB_PORT "3306"
-ENVCONF
-              # Replace placeholders
-              sed -i "s/__DB_NAME__/$DB_NAME/g" /etc/apache2/conf-available/drupal-env.conf
-              sed -i "s/__DB_USER__/$DB_USER/g" /etc/apache2/conf-available/drupal-env.conf
-              sed -i "s/__DB_PASSWORD__/$DB_PASSWORD/g" /etc/apache2/conf-available/drupal-env.conf
+              echo 'SetEnv IS_DOCKER_DEPLOYMENT "true"' > /etc/apache2/conf-available/drupal-env.conf
+              echo "SetEnv DB_NAME \"$DB_NAME\"" >> /etc/apache2/conf-available/drupal-env.conf
+              echo "SetEnv DB_USER \"$DB_USER\"" >> /etc/apache2/conf-available/drupal-env.conf
+              echo "SetEnv DB_PASSWORD \"$DB_PASSWORD\"" >> /etc/apache2/conf-available/drupal-env.conf
+              echo 'SetEnv DB_HOST "drupal_db"' >> /etc/apache2/conf-available/drupal-env.conf
+              echo 'SetEnv DB_PORT "3306"' >> /etc/apache2/conf-available/drupal-env.conf
               # Enable the configuration
               a2enconf drupal-env || echo "a2enconf not available"
               
