@@ -14,3 +14,4 @@ regions:
 libraries:
   - simplesmart/global-css
   - simplesmart/menlo
+logo: logo.png
