@@ -32,3 +32,7 @@ drush-backups
 .console
 /.editorconfig
 /.gitattributes
+
+# Ignore system files
+.DS_Store
+Thumbs.db
