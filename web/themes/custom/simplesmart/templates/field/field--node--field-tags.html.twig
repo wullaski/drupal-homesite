@@ -38,5 +38,4 @@
 #}
 {% for item in items %}
     {{ item.content|merge({'#attributes': {'class': ['project-tag']}}) }}
-    {{ item.content }}
 {% endfor %}
