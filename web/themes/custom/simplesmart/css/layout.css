@@ -44,10 +44,6 @@ body {
     background-color: var(--white);
 }
 
-p:last-child {
-    margin-bottom: 0;
-}
-
 p,
 .tmpl-project li,
 img {
@@ -379,7 +375,8 @@ main time{
 }
 
 .site-footer ul{
-    padding: 0 .8rem;
+    padding: 0 0;
+    list-style: none;
 }
 
 .site-footer ul li {
@@ -398,3 +395,19 @@ main time{
     transform: translateY(0%);
 }
 
+.feed-iconb{
+    display: inline-block;
+    margin-bottom: 1.2em;
+}
+
+.links {
+  padding: 0;
+  list-style: none;
+  margin: 0 0 1.2em;
+}
+
+.menu {
+  margin-right: 0 0 1.2em;
+  list-style: none;
+  padding: 0;
+}
