@@ -36,8 +36,8 @@ RUN chown -R www-data:www-data /var/www/html \
 # Apache configuration
 RUN echo '<VirtualHost *:80>\n\
     ServerAdmin webmaster@localhost\n\
-    DocumentRoot /var/www/html\n\
-    <Directory /var/www/html>\n\
+    DocumentRoot /var/www/html/web\n\
+    <Directory /var/www/html/web>\n\
         Options -Indexes +FollowSymLinks\n\
         AllowOverride All\n\
         Require all granted\n\
