@@ -7,7 +7,7 @@ services:
       context: .
       dockerfile: Dockerfile
     volumes:
-      - /opt/drupal:/var/www/html
+      - drupal_code:/var/www/html
       - /mnt/truenas/drupal-files:/var/www/html/web/sites/default/files
     environment:
       - IS_DOCKER_DEPLOYMENT=true
@@ -41,6 +41,7 @@ services:
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
 
 volumes:
+  drupal_code:
   drupal_db_data:
 
 networks:

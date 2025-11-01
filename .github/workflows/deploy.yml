@@ -99,12 +99,13 @@ jobs:
           DB_USER: ${{ secrets.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_ROOT_PASSWORD: ${{ secrets.DB_ROOT_PASSWORD }}
+          DRUPAL_HASH_SALT: ${{ secrets.DRUPAL_HASH_SALT }}
         with:
           host: ${{ secrets.HOMELAB_TAILSCALE_IP }}
           username: ${{ secrets.HOMELAB_SSH_USER }}
           key: ${{ secrets.HOMELAB_SSH_KEY }}
           timeout: 15m
-          envs: DB_NAME,DB_USER,DB_PASSWORD,DB_ROOT_PASSWORD
+          envs: DB_NAME,DB_USER,DB_PASSWORD,DB_ROOT_PASSWORD,DRUPAL_HASH_SALT
 
           script: |
             set -e
@@ -112,28 +113,13 @@ jobs:
             
             cd ~/drupal-deploy
             
-            # Ensure /opt/drupal directory exists with proper permissions
-            if [ ! -d /opt/drupal ]; then
-              echo "📁 Creating /opt/drupal directory..."
-              sudo mkdir -p /opt/drupal
-              sudo chown $USER:$USER /opt/drupal
-            fi
-            
-            # Generate or preserve hash salt
-            if [ -f /opt/drupal/.hash_salt ]; then
-              HASH_SALT=$(cat /opt/drupal/.hash_salt)
-            else
-              HASH_SALT=$(openssl rand -hex 64)
-              echo "$HASH_SALT" > /opt/drupal/.hash_salt
-            fi
-            
             # Create .env file for docker-compose
             cat > .env << ENVEOF
             DB_NAME=$DB_NAME
             DB_USER=$DB_USER
             DB_PASSWORD=$DB_PASSWORD
             DB_ROOT_PASSWORD=$DB_ROOT_PASSWORD
-            DRUPAL_HASH_SALT=$HASH_SALT
+            DRUPAL_HASH_SALT=$DRUPAL_HASH_SALT
             ENVEOF
             
             echo "📦 Building and starting containers..."
@@ -166,7 +152,7 @@ jobs:
                 echo "✅ Drupal bootstrap successful"
                 
                 # Import configuration
-                echo "� Importing configuration..."
+                echo "Importing configuration..."
                 ./vendor/bin/drush cim -y || echo "⚠️ Config import failed"
                 
                 # Run database updates
