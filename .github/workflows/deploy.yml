@@ -123,14 +123,14 @@ jobs:
             ENVEOF
             
             echo "📦 Building and starting containers..."
-            docker-compose down
-            docker-compose up -d --build
+            docker compose down
+            docker compose up -d --build
             
             echo "⏳ Waiting for services to be ready..."
             sleep 20
             
             echo "📦 Installing Composer dependencies..."
-            docker-compose exec -T drupal bash << 'COMPOSEREOF'
+            docker compose exec -T drupal bash << 'COMPOSEREOF'
               cd /var/www/html
               composer config --no-plugins allow-plugins.drupal/core-composer-scaffold true
               composer config --no-plugins allow-plugins.drush/drush true
@@ -144,7 +144,7 @@ jobs:
             COMPOSEREOF
             
             echo "🔧 Running Drupal updates..."
-            docker-compose exec -T drupal bash << 'DRUSHEOF'
+            docker compose exec -T drupal bash << 'DRUSHEOF'
               cd /var/www/html
               
               # Check if Drupal is installed
@@ -175,7 +175,7 @@ jobs:
             DRUSHEOF
             
             echo "🔧 Setting proper permissions..."
-            docker-compose exec -T drupal bash << 'PERMEOF'
+            docker compose exec -T drupal bash << 'PERMEOF'
               chown -R www-data:www-data /var/www/html
               find /var/www/html -type d -exec chmod 755 {} \;
               find /var/www/html -type f -exec chmod 644 {} \;
@@ -189,7 +189,7 @@ jobs:
             PERMEOF
             
             echo "✅ Deployment complete!"
-            docker-compose ps
+            docker compose ps
 
       # 6. Clean up Tailscale session
       - name: Disconnect Tailscale
