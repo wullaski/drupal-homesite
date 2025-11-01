@@ -112,12 +112,18 @@ jobs:
             
             cd ~/drupal-deploy
             
+            # Ensure /opt/drupal directory exists with proper permissions
+            if [ ! -d /opt/drupal ]; then
+              echo "📁 Creating /opt/drupal directory..."
+              sudo mkdir -p /opt/drupal
+              sudo chown $USER:$USER /opt/drupal
+            fi
+            
             # Generate or preserve hash salt
             if [ -f /opt/drupal/.hash_salt ]; then
               HASH_SALT=$(cat /opt/drupal/.hash_salt)
             else
               HASH_SALT=$(openssl rand -hex 64)
-              mkdir -p /opt/drupal
               echo "$HASH_SALT" > /opt/drupal/.hash_salt
             fi
             
