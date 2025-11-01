@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  drupal:
+    container_name: homesite
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - /opt/drupal:/var/www/html
+      - /mnt/truenas/drupal-files:/var/www/html/web/sites/default/files
+    environment:
+      - IS_DOCKER_DEPLOYMENT=true
+      - DB_HOST=drupal_db
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_PORT=3306
+      - DRUPAL_HASH_SALT=${DRUPAL_HASH_SALT}
+    ports:
+      - "80:80"
+    networks:
+      - docker_net
+    restart: unless-stopped
+    depends_on:
+      - db
+
+  db:
+    container_name: drupal_db
+    image: mariadb:10.11
+    volumes:
+      - drupal_db_data:/var/lib/mysql
+    environment:
+      - MYSQL_DATABASE=${DB_NAME}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+    networks:
+      - docker_net
+    restart: unless-stopped
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+volumes:
+  drupal_db_data:
+
+networks:
+  docker_net:
+    external: true

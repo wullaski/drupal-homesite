@@ -23,6 +23,9 @@ console/
 # Ignore .env files as they are personal
 /.env
 
+# Docker
+docker-compose.override.yml
+
 # Ignore mounts
 web/sites/default/files
 tmp

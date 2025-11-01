@@ -85,129 +85,61 @@ jobs:
         timeout-minutes: 5
         run: |
           echo "🚀 Copying Drupal code to homelab..."
-          rsync -az --timeout=300 --delete --exclude '.git' --exclude '.github' ./ ${{ secrets.HOMELAB_SSH_USER }}@${{ secrets.HOMELAB_TAILSCALE_IP }}:/home/${{ secrets.HOMELAB_SSH_USER }}/drupal_deploy_tmp
+          rsync -az --timeout=300 --delete \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'web/sites/default/files' \
+            ./ ${{ secrets.HOMELAB_SSH_USER }}@${{ secrets.HOMELAB_TAILSCALE_IP }}:/home/${{ secrets.HOMELAB_SSH_USER }}/drupal-deploy
 
-      # 6. Deploy Drupal via SSH action
+      # 6. Deploy Drupal via Docker Compose
       - name: Deploy Drupal
         uses: appleboy/ssh-action@v1.0.3
         env:
           DB_NAME: ${{ secrets.DB_NAME }}
           DB_USER: ${{ secrets.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_ROOT_PASSWORD: ${{ secrets.DB_ROOT_PASSWORD }}
         with:
           host: ${{ secrets.HOMELAB_TAILSCALE_IP }}
           username: ${{ secrets.HOMELAB_SSH_USER }}
           key: ${{ secrets.HOMELAB_SSH_KEY }}
           timeout: 15m
-          envs: DB_NAME,DB_USER,DB_PASSWORD
+          envs: DB_NAME,DB_USER,DB_PASSWORD,DB_ROOT_PASSWORD
 
           script: |
             set -e
-            echo "🚀 Starting Drupal deployment..."
-            echo "DB_NAME: $DB_NAME"
-            echo "DB_USER: $DB_USER"
-            echo "DB_PASSWORD: [REDACTED]"
+            echo "🚀 Starting Docker Compose deployment..."
             
-            echo '--- Testing docker access ---'
-            if docker ps >/dev/null 2>&1; then
-              echo '✅ Docker access confirmed'
-            else
-              echo '❌ This script requires docker access for the SSH user'
-              echo 'Please run this command on your server to add the user to docker group:'
-              echo '  sudo usermod -aG docker $USER'
-              echo 'Then logout and login again, or run: newgrp docker'
-              exit 1
-            fi
+            cd ~/drupal-deploy
             
-            echo '--- Moving code into live Drupal volume ---'
-            # Use docker to copy files with proper permissions
-            docker run --rm -v /home/$USER/drupal_deploy_tmp:/source -v /opt/drupal:/dest alpine sh -c '
-              rm -rf /dest/* /dest/.[^.]* 2>/dev/null || true
-              # Copy composer files to root
-              cp -a /source/composer.* /dest/ 2>/dev/null || true
-              cp -a /source/README.md /dest/ 2>/dev/null || true
-              cp -a /source/.env* /dest/ 2>/dev/null || true
-              # Copy web directory contents directly to dest root (not dest/web)
-              if [ -d /source/web ]; then
-                echo "Copying web directory contents to Drupal root..."
-                cp -a /source/web/. /dest/
-              fi
-              # Copy vendor if it exists
-              if [ -d /source/vendor ]; then
-                cp -a /source/vendor /dest/
-              fi
-            '
-            rm -rf /home/$USER/drupal_deploy_tmp
-
-            echo '--- Checking if container exists and is running ---'
-            if docker ps -a --format 'table {{.Names}}' | grep -q '^homesite$'; then
-              echo '✅ Container homesite exists'
-              if ! docker ps --format 'table {{.Names}}' | grep -q '^homesite$'; then
-                echo '⚠️  Container homesite not running, starting...'
-                docker start homesite
-                sleep 5
-              else
-                echo '✅ Container homesite is already running'
-              fi
-            else
-              echo '❌ Container homesite does not exist'
-              echo 'Available containers:'
-              docker ps -a
-              exit 1
-            fi
-
-            echo '--- Ensuring container is connected to docker_net network ---'
-            if docker network ls --format '{{.Name}}' | grep -q '^docker_net$'; then
-              echo '✅ docker_net network exists'
-              if docker network inspect docker_net --format '{{range .Containers}}{{.Name}} {{end}}' | grep -q homesite; then
-                echo '✅ homesite is already connected to docker_net'
-              else
-                echo '🔌 Connecting homesite to docker_net network...'
-                docker network connect docker_net homesite
-                echo '✅ homesite connected to docker_net network'
-              fi
-            else
-              echo '⚠️  docker_net network not found - database connectivity may not work'
-              echo 'Available networks:'
-              docker network ls
-            fi
-
-            echo '--- Running deployment steps inside container ---'
-            docker exec -i -e IS_DOCKER_DEPLOYMENT=true -e DB_NAME="$DB_NAME" -e DB_USER="$DB_USER" -e DB_PASSWORD="$DB_PASSWORD" homesite timeout 600 bash << 'EOF'
-              set -e
-              echo "Debug: Environment variables set:"
-              echo "  IS_DOCKER_DEPLOYMENT=$IS_DOCKER_DEPLOYMENT"
-              echo "  DB_NAME=$DB_NAME"
-              echo "  DB_USER=$DB_USER"
-              echo "  DB_HOST will default to: drupal_db"
-              
-              echo "🔧 Setting up persistent environment variables for Apache..."
-              
-              # Generate a secure hash salt if it doesn't exist
-              if [ ! -f /opt/drupal/.hash_salt ]; then
-                echo "🔐 Generating secure hash salt..."
-                openssl rand -hex 64 > /opt/drupal/.hash_salt
-                echo "✅ Hash salt generated and saved"
-              fi
+            # Generate or preserve hash salt
+            if [ -f /opt/drupal/.hash_salt ]; then
               HASH_SALT=$(cat /opt/drupal/.hash_salt)
-              
-              # Add environment variables to Apache envvars file
-              echo "export IS_DOCKER_DEPLOYMENT=true" >> /etc/apache2/envvars
-              echo "export DB_NAME=$DB_NAME" >> /etc/apache2/envvars
-              echo "export DB_USER=$DB_USER" >> /etc/apache2/envvars
-              echo "export DB_PASSWORD=$DB_PASSWORD" >> /etc/apache2/envvars
-              echo "export DB_HOST=drupal_db" >> /etc/apache2/envvars
-              echo "export DB_PORT=3306" >> /etc/apache2/envvars
-              echo "export DRUPAL_HASH_SALT=$HASH_SALT" >> /etc/apache2/envvars
-              
-              echo "✅ Environment variables configured for persistence"
-              
-              cd /opt/drupal
-              echo "🔧 Installing system dependencies..."
-              apt-get update -qq && apt-get install -y unzip apache2-utils
-              echo "🧹 Clearing composer cache..."
-              composer clear-cache
-              echo "⚙️  Configuring composer plugins..."
+            else
+              HASH_SALT=$(openssl rand -hex 64)
+              mkdir -p /opt/drupal
+              echo "$HASH_SALT" > /opt/drupal/.hash_salt
+            fi
+            
+            # Create .env file for docker-compose
+            cat > .env << ENVEOF
+            DB_NAME=$DB_NAME
+            DB_USER=$DB_USER
+            DB_PASSWORD=$DB_PASSWORD
+            DB_ROOT_PASSWORD=$DB_ROOT_PASSWORD
+            DRUPAL_HASH_SALT=$HASH_SALT
+            ENVEOF
+            
+            echo "📦 Building and starting containers..."
+            docker-compose down
+            docker-compose up -d --build
+            
+            echo "⏳ Waiting for services to be ready..."
+            sleep 20
+            
+            echo "📦 Installing Composer dependencies..."
+            docker-compose exec -T drupal bash << 'COMPOSEREOF'
+              cd /var/www/html
               composer config --no-plugins allow-plugins.drupal/core-composer-scaffold true
               composer config --no-plugins allow-plugins.drush/drush true
               composer config --no-plugins allow-plugins.composer/installers true
@@ -216,120 +148,56 @@ jobs:
               composer config --no-plugins allow-plugins.phpstan/extension-installer true
               composer config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
               composer config --no-plugins allow-plugins.php-http/discovery true
-              echo "📦 Installing composer dependencies (with update to resolve lock conflicts)..."
-              composer update --no-cache --no-interaction --prefer-dist
-              echo "🔧 Ensuring Drush is installed..."
-              if ! composer show drush/drush >/dev/null 2>&1; then
-                echo "⚠️  Drush not found, installing explicitly..."
-                composer require drush/drush --no-cache --no-interaction --prefer-dist
-              else
-                echo "✅ Drush package is already installed"
-              fi
-              echo "🔄 Verifying all packages installed..."
-              composer show | grep -E "(drush|drupal)"
-              echo "🔍 Checking if Drush was installed..."
-              ls -la vendor/bin/ | grep drush || echo "Drush not found in vendor/bin"
-              echo "🔧 Setting file permissions..."
-              chown -R www-data:www-data /opt/drupal
-              find /opt/drupal -type d -exec chmod 755 {} \;
-              find /opt/drupal -type f -exec chmod 644 {} \;
-              echo "🔧 Preserving execute permissions for vendor binaries..."
-              find /opt/drupal/vendor/bin -type f -exec chmod 755 {} \;
-              echo "🔧 Ensuring Drush executable has correct permissions..."
-              find /opt/drupal/vendor -name "drush" -type f -exec chmod 755 {} \;
-              echo "Final verification of Drush installation..."
-              if [ -f "./vendor/bin/drush" ]; then
-                echo "✅ Drush binary found at ./vendor/bin/drush"
-                ./vendor/bin/drush --version
-              else
-                echo "❌ Drush binary not found, checking composer show output..."
-                composer show drush/drush || echo "Drush package not installed"
-              fi
-              echo "Checking database connectivity..."
-              echo "Debug: Testing network connectivity to drupal_db..."
-              ping -c 2 drupal_db || echo "Cannot ping drupal_db container"
-              echo "Debug: Testing port 3306 on drupal_db..."
-              timeout 5 bash -c "</dev/tcp/drupal_db/3306" && echo "Port 3306 accessible" || echo "Port 3306 not accessible"
-              if [ -f "./vendor/bin/drush" ]; then
-                echo "Debug: Testing database connection with drush status..."
-                ./vendor/bin/drush status || echo "Drush status failed"
+              composer install --no-interaction --optimize-autoloader
+            COMPOSEREOF
+            
+            echo "🔧 Running Drupal updates..."
+            docker-compose exec -T drupal bash << 'DRUSHEOF'
+              cd /var/www/html
+              
+              # Check if Drupal is installed
+              if ./vendor/bin/drush status --format=json 2>/dev/null | grep -q '"bootstrap":"Successful"'; then
+                echo "✅ Drupal bootstrap successful"
                 
-                # Check if Drupal is installed
-                if ./vendor/bin/drush status --format=json 2>/dev/null | grep -q "\"bootstrap\":\"Successful\""; then
-                  echo "✅ Database connection verified - Drupal is properly installed"
-                  echo "📊 Importing configuration..."
-                  ./vendor/bin/drush cim -y
-                  echo "🗄️  Running database updates..."
-                  ./vendor/bin/drush updb -y
-                  echo "🧹 Clearing caches..."
-                  ./vendor/bin/drush cr
-                  echo "🎨 Configuring custom theme..."
-                  ./vendor/bin/drush theme:enable simplesmart || echo "Theme enable failed"
-                  ./vendor/bin/drush config:set system.theme default simplesmart -y || echo "Theme set failed"
-                else
-                  echo "⚠️  Drupal not bootstrapping - checking if site needs installation"
-                  
-                  # Check if database has Drupal tables
-                  if ./vendor/bin/drush sql-query "SHOW TABLES LIKE 'users'" 2>/dev/null | grep -q users; then
-                    echo "✅ Drupal tables exist - site should be installed"
-                    echo "🔧 Trying to rebuild and clear all caches..."
-                    ./vendor/bin/drush cr || echo "Cache clear failed"
-                    ./vendor/bin/drush status || echo "Status check still failing"
-                    
-                    # Try to force cache rebuild
-                    echo "🔧 Forcing cache rebuild..."
-                    rm -rf /opt/drupal/web/sites/default/files/php/twig/* 2>/dev/null || true
-                    rm -rf /opt/drupal/web/sites/default/files/css/* 2>/dev/null || true  
-                    rm -rf /opt/drupal/web/sites/default/files/js/* 2>/dev/null || true
-                    
-                    echo "🔧 Setting proper file permissions for Drupal..."
-                    chown -R www-data:www-data /opt/drupal/web/sites/default/files
-                    chmod 755 /opt/drupal/web/sites/default
-                    chmod 644 /opt/drupal/web/sites/default/settings.php
-                    
-                    echo "🎨 Ensuring custom theme is enabled and active..."
-                    ./vendor/bin/drush theme:enable simplesmart || echo "Theme enable failed"
-                    ./vendor/bin/drush config:set system.theme default simplesmart -y || echo "Theme set failed"
-                  else
-                    echo "❌ No Drupal tables found - database appears empty"
-                    echo "⚠️  Manual intervention may be required"
-                    echo "💡 Consider restoring from backup or running fresh installation manually"
-                    echo "🚫 Skipping automatic installation to prevent data loss"
-                  fi
-                fi
+                # Import configuration
+                echo "� Importing configuration..."
+                ./vendor/bin/drush cim -y || echo "⚠️ Config import failed"
+                
+                # Run database updates
+                echo "🗄️ Running database updates..."
+                ./vendor/bin/drush updb -y || echo "⚠️ Database updates failed"
+                
+                # Enable and set theme
+                echo "🎨 Configuring theme..."
+                ./vendor/bin/drush theme:enable simplesmart || echo "⚠️ Theme enable failed"
+                ./vendor/bin/drush config:set system.theme default simplesmart -y || echo "⚠️ Theme set failed"
+                
+                # Clear caches
+                echo "🧹 Clearing caches..."
+                ./vendor/bin/drush cr
+                
+                echo "✅ Drupal updates completed"
               else
-                echo "❌ Drush not found, skipping Drupal commands"
+                echo "⚠️ Drupal not bootstrapping - may need manual intervention"
               fi
-              echo "✅ Drupal deployment steps completed successfully"
-            EOF
+            DRUSHEOF
             
-            echo "--- Reloading Apache and PHP services ---"
-            if docker ps --format 'table {{.Names}}' | grep -q '^homesite$'; then
-              echo "🔄 Reloading services inside container..."
-              # Reload PHP-FPM if it exists
-              docker exec homesite bash -c "service php*-fpm reload 2>/dev/null || true"
-              # Reload Apache configuration
-              docker exec homesite bash -c "service apache2 reload || systemctl reload apache2 || true"
-              echo "🔄 Restarting container for environment variables to take effect..."
-              docker restart homesite
-              echo "✅ Container restarted successfully"
-            else
-              echo "⚠️  Container homesite not running, attempting to start..."
-              docker start homesite || echo "❌ Failed to start container"
-            fi
-            
-            echo "--- Waiting for container to be ready ---"
-            sleep 10
-            for i in {1..30}; do
-              if docker ps | grep -q homesite && docker exec homesite curl -f http://localhost >/dev/null 2>&1; then
-                echo "✅ Container is healthy and responding"
-                break
+            echo "🔧 Setting proper permissions..."
+            docker-compose exec -T drupal bash << 'PERMEOF'
+              chown -R www-data:www-data /var/www/html
+              find /var/www/html -type d -exec chmod 755 {} \;
+              find /var/www/html -type f -exec chmod 644 {} \;
+              find /var/www/html/vendor/bin -type f -exec chmod 755 {} \;
+              
+              # Ensure files directory has correct permissions
+              if [ -d /var/www/html/web/sites/default/files ]; then
+                chown -R www-data:www-data /var/www/html/web/sites/default/files
+                chmod 755 /var/www/html/web/sites/default
               fi
-              echo "⏳ Waiting for container to be ready... ($i/30)"
-              sleep 2
-            done
+            PERMEOF
             
-            echo "✅ Deployment complete and container restarted."
+            echo "✅ Deployment complete!"
+            docker-compose ps
 
       # 6. Clean up Tailscale session
       - name: Disconnect Tailscale
