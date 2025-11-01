@@ -124,7 +124,11 @@ jobs:
             
             echo "📦 Building and starting containers..."
             docker compose down
-            docker compose up -d --build
+            
+            # Build with less verbose output
+            export BUILDKIT_PROGRESS=plain
+            docker compose build --quiet 2>&1 | tail -n 50
+            docker compose up -d
             
             echo "⏳ Waiting for services to be ready..."
             sleep 20
