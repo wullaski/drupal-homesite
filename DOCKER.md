@@ -89,7 +89,7 @@ docker-compose up -d --build
 
 ### Access Drupal container shell
 ```bash
-docker-compose exec drupal bash
+docker exec -it homesite bash
 ```
 
 ### Access database
