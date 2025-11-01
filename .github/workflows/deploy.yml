@@ -188,9 +188,18 @@ jobs:
               # Ensure files directory has correct permissions
               if [ -d /var/www/html/web/sites/default/files ]; then
                 chown -R www-data:www-data /var/www/html/web/sites/default/files
+                find /var/www/html/web/sites/default/files -type d -exec chmod 775 {} \;
+                find /var/www/html/web/sites/default/files -type f -exec chmod 664 {} \;
                 chmod 755 /var/www/html/web/sites/default
               fi
             PERMEOF
+            
+            echo "🖼️ Clearing image cache..."
+            docker compose exec -T drupal bash << 'IMAGEOF'
+              cd /var/www/html
+              # Flush image styles to regenerate them
+              ./vendor/bin/drush image-flush --all || echo "⚠️ Image flush failed"
+            IMAGEOF
             
             echo "✅ Deployment complete!"
             docker compose ps
