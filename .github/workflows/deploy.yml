@@ -180,16 +180,15 @@ jobs:
             
             echo "🔧 Setting proper permissions..."
             docker compose exec -T drupal bash << 'PERMEOF'
+              # Set permissions for code, but exclude the files directory (NFS mount)
               chown -R www-data:www-data /var/www/html
-              find /var/www/html -type d -exec chmod 755 {} \;
-              find /var/www/html -type f -exec chmod 644 {} \;
+              find /var/www/html -path /var/www/html/web/sites/default/files -prune -o -type d -exec chmod 755 {} \;
+              find /var/www/html -path /var/www/html/web/sites/default/files -prune -o -type f -exec chmod 644 {} \;
               find /var/www/html/vendor/bin -type f -exec chmod 755 {} \;
               
-              # Ensure files directory has correct permissions
+              # Only set ownership for files directory, don't change existing file permissions
               if [ -d /var/www/html/web/sites/default/files ]; then
                 chown -R www-data:www-data /var/www/html/web/sites/default/files
-                find /var/www/html/web/sites/default/files -type d -exec chmod 775 {} \;
-                find /var/www/html/web/sites/default/files -type f -exec chmod 664 {} \;
                 chmod 755 /var/www/html/web/sites/default
               fi
             PERMEOF
