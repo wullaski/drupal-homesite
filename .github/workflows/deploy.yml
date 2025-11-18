@@ -120,6 +120,7 @@ jobs:
             DB_PASSWORD=$DB_PASSWORD
             DB_ROOT_PASSWORD=$DB_ROOT_PASSWORD
             DRUPAL_HASH_SALT=$DRUPAL_HASH_SALT
+            IS_DOCKER_DEPLOYMENT=true
             ENVEOF
             
             echo "📦 Building and starting containers..."
