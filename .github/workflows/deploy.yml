@@ -148,6 +148,21 @@ jobs:
               composer install --no-interaction --optimize-autoloader
             COMPOSEREOF
             
+            echo "🔧 Setting proper permissions..."
+            docker compose exec -T drupal bash << 'PERMEOF'
+              # Set permissions for code, but exclude the files directory (NFS mount)
+              chown -R www-data:www-data /var/www/html
+              find /var/www/html -path /var/www/html/web/sites/default/files -prune -o -type d -exec chmod 755 {} \;
+              find /var/www/html -path /var/www/html/web/sites/default/files -prune -o -type f -exec chmod 644 {} \;
+              find /var/www/html/vendor/bin -type f -exec chmod 755 {} \;
+              
+              # Only set ownership for files directory, don't change existing file permissions
+              if [ -d /var/www/html/web/sites/default/files ]; then
+                chown -R www-data:www-data /var/www/html/web/sites/default/files
+                chmod 755 /var/www/html/web/sites/default
+              fi
+            PERMEOF
+            
             echo "🔧 Running Drupal updates..."
             docker compose exec -T drupal bash << 'DRUSHEOF'
               cd /var/www/html
@@ -179,22 +194,7 @@ jobs:
               fi
             DRUSHEOF
             
-            echo "🔧 Setting proper permissions..."
-            docker compose exec -T drupal bash << 'PERMEOF'
-              # Set permissions for code, but exclude the files directory (NFS mount)
-              chown -R www-data:www-data /var/www/html
-              find /var/www/html -path /var/www/html/web/sites/default/files -prune -o -type d -exec chmod 755 {} \;
-              find /var/www/html -path /var/www/html/web/sites/default/files -prune -o -type f -exec chmod 644 {} \;
-              find /var/www/html/vendor/bin -type f -exec chmod 755 {} \;
-              
-              # Only set ownership for files directory, don't change existing file permissions
-              if [ -d /var/www/html/web/sites/default/files ]; then
-                chown -R www-data:www-data /var/www/html/web/sites/default/files
-                chmod 755 /var/www/html/web/sites/default
-              fi
-            PERMEOF
-            
-            echo "🖼️ Clearing image cache..."
+            echo "️ Clearing image cache..."
             docker compose exec -T drupal bash << 'IMAGEOF'
               cd /var/www/html
               # Flush image styles to regenerate them
