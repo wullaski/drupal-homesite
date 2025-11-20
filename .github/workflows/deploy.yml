@@ -173,6 +173,15 @@ jobs:
               # Run Drupal updates (drush is working, just run the commands)
               echo "Running Drupal updates..."
               
+              # Check if module directory exists
+              echo "🔍 Checking module installation..."
+              if [ -d "web/modules/contrib/ckeditor5_plugin_pack" ]; then
+                echo "✅ CKEditor 5 Plugin Pack directory exists"
+                ls -la web/modules/contrib/ckeditor5_plugin_pack
+              else
+                echo "❌ CKEditor 5 Plugin Pack directory NOT found"
+              fi
+              
               # Import configuration
               echo "📥 Importing configuration..."
               vendor/bin/drush cim -y || echo "⚠️ Config import failed or no changes"
@@ -186,9 +195,9 @@ jobs:
               vendor/bin/drush theme:enable simplesmart || echo "⚠️ Theme enable failed or already enabled"
               vendor/bin/drush config:set system.theme default simplesmart -y || echo "⚠️ Theme set failed or already set"
               
-              # Check if CKEditor 5 Plugin Pack module is available
-              echo "🔍 Checking for CKEditor 5 Plugin Pack module..."
-              vendor/bin/drush pm:list --filter=ckeditor5_plugin_pack || echo "Module list failed"
+              # List all available modules (no filter)
+              echo "🔍 Listing all contrib modules..."
+              vendor/bin/drush pm:list --type=module --status=available | grep -i ckeditor || echo "No CKEditor modules found"
               
               # Clear caches
               echo "🧹 Clearing caches..."
