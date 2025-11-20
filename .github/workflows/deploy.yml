@@ -109,7 +109,7 @@ jobs:
 
           script: |
             set -e
-            echo "🚀 Starting Docker Compose deployment..."
+            echo "Starting Docker Compose deployment..."
             
             cd ~/drupal-deploy
             
