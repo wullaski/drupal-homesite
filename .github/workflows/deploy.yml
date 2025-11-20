@@ -156,6 +156,9 @@ jobs:
               find /var/www/html -path /var/www/html/web/sites/default/files -prune -o -type f -exec chmod 644 {} \;
               find /var/www/html/vendor/bin -type f -exec chmod 755 {} \;
               
+              # Fix drush executable permissions
+              chmod +x /var/www/html/vendor/drush/drush/drush
+              
               # Only set ownership for files directory, don't change existing file permissions
               if [ -d /var/www/html/web/sites/default/files ]; then
                 chown -R www-data:www-data /var/www/html/web/sites/default/files
