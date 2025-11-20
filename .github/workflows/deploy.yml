@@ -167,26 +167,31 @@ jobs:
             docker compose exec -T -u root drupal bash << 'DRUSHEOF'
               cd /var/www/html
               
+              # Debug: Check drush files
+              echo "Checking drush installation..."
+              ls -la vendor/bin/drush || echo "vendor/bin/drush not found"
+              ls -la vendor/drush/drush/drush || echo "vendor/drush/drush/drush not found"
+              
               # Check if Drupal is installed
-              if ./vendor/bin/drush status --format=json 2>/dev/null | grep -q '"bootstrap":"Successful"'; then
+              if vendor/bin/drush status --format=json 2>/dev/null | grep -q '"bootstrap":"Successful"'; then
                 echo "✅ Drupal bootstrap successful"
                 
                 # Import configuration
                 echo "Importing configuration..."
-                ./vendor/bin/drush cim -y || echo "⚠️ Config import failed"
+                vendor/bin/drush cim -y || echo "⚠️ Config import failed"
                 
                 # Run database updates
                 echo "🗄️ Running database updates..."
-                ./vendor/bin/drush updb -y || echo "⚠️ Database updates failed"
+                vendor/bin/drush updb -y || echo "⚠️ Database updates failed"
                 
                 # Enable and set theme
                 echo "🎨 Configuring theme..."
-                ./vendor/bin/drush theme:enable simplesmart || echo "⚠️ Theme enable failed"
-                ./vendor/bin/drush config:set system.theme default simplesmart -y || echo "⚠️ Theme set failed"
+                vendor/bin/drush theme:enable simplesmart || echo "⚠️ Theme enable failed"
+                vendor/bin/drush config:set system.theme default simplesmart -y || echo "⚠️ Theme set failed"
                 
                 # Clear caches
                 echo "🧹 Clearing caches..."
-                ./vendor/bin/drush cr
+                vendor/bin/drush cr
                 
                 echo "✅ Drupal updates completed"
               else
@@ -198,7 +203,7 @@ jobs:
             docker compose exec -T -u root drupal bash << 'IMAGEOF'
               cd /var/www/html
               # Flush image styles to regenerate them
-              ./vendor/bin/drush image-flush --all || echo "⚠️ Image flush failed"
+              vendor/bin/drush image-flush --all || echo "⚠️ Image flush failed"
             IMAGEOF
             
             echo "✅ Deployment complete!"
