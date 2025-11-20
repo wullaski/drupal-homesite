@@ -93,22 +93,24 @@
 $databases = [];
 
 // Function to load environment variables from .env file if not set
-function loadEnvIfNotSet($key, $default = null) {
-  $value = getenv($key);
-  if ($value === false || $value === '') {
-    // Try to load from .env file
-    $env_file = __DIR__ . '/../../.env';
-    if (file_exists($env_file)) {
-      $lines = file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-      foreach ($lines as $line) {
-        if (strpos($line, $key . '=') === 0) {
-          $value = substr($line, strlen($key) + 1);
-          break;
+if (!function_exists('loadEnvIfNotSet')) {
+  function loadEnvIfNotSet($key, $default = null) {
+    $value = getenv($key);
+    if ($value === false || $value === '') {
+      // Try to load from .env file
+      $env_file = __DIR__ . '/../../.env';
+      if (file_exists($env_file)) {
+        $lines = file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $line) {
+          if (strpos($line, $key . '=') === 0) {
+            $value = substr($line, strlen($key) + 1);
+            break;
+          }
         }
       }
     }
+    return $value ?: $default;
   }
-  return $value ?: $default;
 }
 
 // Database configuration for Docker deployment
