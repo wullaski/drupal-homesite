@@ -170,36 +170,31 @@ jobs:
             docker compose exec -T -u root drupal bash << 'DRUSHEOF'
               cd /var/www/html
               
-              # Debug: Check drush files
-              echo "Checking drush installation..."
-              ls -la vendor/bin/drush || echo "vendor/bin/drush not found"
-              ls -la vendor/drush/drush/drush || echo "vendor/drush/drush/drush not found"
+              # Run Drupal updates (drush is working, just run the commands)
+              echo "Running Drupal updates..."
               
-              # Check if Drupal is installed
-              if vendor/bin/drush status --format=json 2>/dev/null | grep -q '"bootstrap":"Successful"'; then
-                echo "✅ Drupal bootstrap successful"
-                
-                # Import configuration
-                echo "Importing configuration..."
-                vendor/bin/drush cim -y || echo "⚠️ Config import failed"
-                
-                # Run database updates
-                echo "🗄️ Running database updates..."
-                vendor/bin/drush updb -y || echo "⚠️ Database updates failed"
-                
-                # Enable and set theme
-                echo "🎨 Configuring theme..."
-                vendor/bin/drush theme:enable simplesmart || echo "⚠️ Theme enable failed"
-                vendor/bin/drush config:set system.theme default simplesmart -y || echo "⚠️ Theme set failed"
-                
-                # Clear caches
-                echo "🧹 Clearing caches..."
-                vendor/bin/drush cr
-                
-                echo "✅ Drupal updates completed"
-              else
-                echo "⚠️ Drupal not bootstrapping - may need manual intervention"
-              fi
+              # Import configuration
+              echo "📥 Importing configuration..."
+              vendor/bin/drush cim -y || echo "⚠️ Config import failed or no changes"
+              
+              # Run database updates
+              echo "🗄️ Running database updates..."
+              vendor/bin/drush updb -y || echo "⚠️ Database updates failed or not needed"
+              
+              # Enable and set theme
+              echo "🎨 Configuring theme..."
+              vendor/bin/drush theme:enable simplesmart || echo "⚠️ Theme enable failed or already enabled"
+              vendor/bin/drush config:set system.theme default simplesmart -y || echo "⚠️ Theme set failed or already set"
+              
+              # Check if CKEditor 5 Plugin Pack module is available
+              echo "🔍 Checking for CKEditor 5 Plugin Pack module..."
+              vendor/bin/drush pm:list --filter=ckeditor5_plugin_pack || echo "Module list failed"
+              
+              # Clear caches
+              echo "🧹 Clearing caches..."
+              vendor/bin/drush cr
+              
+              echo "✅ Drupal updates completed"
             DRUSHEOF
             
             echo "🖼️ Clearing image cache..."
