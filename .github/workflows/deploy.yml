@@ -164,7 +164,7 @@ jobs:
             PERMEOF
             
             echo "🔧 Running Drupal updates..."
-            docker compose exec -T drupal bash << 'DRUSHEOF'
+            docker compose exec -T -u root drupal bash << 'DRUSHEOF'
               cd /var/www/html
               
               # Check if Drupal is installed
@@ -194,8 +194,8 @@ jobs:
               fi
             DRUSHEOF
             
-            echo "️ Clearing image cache..."
-            docker compose exec -T drupal bash << 'IMAGEOF'
+            echo "🖼️ Clearing image cache..."
+            docker compose exec -T -u root drupal bash << 'IMAGEOF'
               cd /var/www/html
               # Flush image styles to regenerate them
               ./vendor/bin/drush image-flush --all || echo "⚠️ Image flush failed"
