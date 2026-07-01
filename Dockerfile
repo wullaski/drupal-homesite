@@ -36,12 +36,12 @@ COPY . /var/www/html
 # allow-plugins are already declared in composer.json, so no runtime config is needed.
 RUN composer install --no-dev --no-interaction --optimize-autoloader --no-progress
 
-# Normalise ownership only. Composer already sets sane permissions (binaries
-# executable, everything else readable), so we deliberately do NOT run a blanket
-# `chmod` here: it would strip the execute bit from vendor binaries like drush,
-# and forking one chmod per file across the whole tree takes minutes. A single
-# recursive chown is fast and leaves execute bits intact.
-RUN chown -R www-data:www-data /var/www/html
+# No chown/chmod of the code tree. The code is read-only at runtime: Apache only
+# needs to READ it, and Composer/git files are already world-readable, so leaving
+# it root-owned is fine (and keeps settings.php non-writable by www-data, which
+# Drupal prefers). The only paths written at runtime are the mounted files
+# directory (chowned in scripts/deploy.sh) and /tmp. A recursive chown here would
+# add minutes to every build on slower storage for no benefit.
 
 # Apache configuration
 RUN echo '<VirtualHost *:80>\n\

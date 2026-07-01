@@ -119,15 +119,16 @@ for i in $(seq 1 30); do
   sleep 2
 done
 
-# Reliable readiness probe: drush must be able to run a query against Drupal's DB.
-echo "⏳ Waiting for Drupal to reach the database..."
+# Readiness probe: drush must bootstrap Drupal with a working DB connection.
+# `drush status` reports "Drupal bootstrap : Successful" once it's ready.
+echo "⏳ Waiting for Drupal to bootstrap..."
 for i in $(seq 1 30); do
-  if drush sql:query "SELECT 1" >/dev/null 2>&1; then
-    echo "✅ Drupal can reach the database."
+  if drush status 2>/dev/null | grep -qiE 'bootstrap.*successful'; then
+    echo "✅ Drupal bootstrapped."
     break
   fi
   if [ "$i" -eq 30 ]; then
-    echo "❌ Drupal could not reach the database in time. drush status was:"
+    echo "❌ Drupal did not bootstrap in time. drush status was:"
     drush status || true
     dc logs --tail=50 drupal
     exit 1
