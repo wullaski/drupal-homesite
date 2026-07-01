@@ -36,11 +36,15 @@ COPY . /var/www/html
 # allow-plugins are already declared in composer.json, so no runtime config is needed.
 RUN composer install --no-dev --no-interaction --optimize-autoloader --no-progress
 
-# Set proper permissions
+# Set proper permissions. The blanket 644 strips execute bits from vendor
+# binaries, so restore +x afterwards. Entries in vendor/bin are symlinks, so we
+# chmod through them (chmod follows symlinks) to reach the real executables, and
+# fix the drush binary explicitly since that's what the deploy script runs.
 RUN chown -R www-data:www-data /var/www/html \
     && find /var/www/html -type d -exec chmod 755 {} \; \
     && find /var/www/html -type f -exec chmod 644 {} \; \
-    && find /var/www/html/vendor/bin -type f -exec chmod 755 {} \;
+    && find /var/www/html/vendor/bin -type l -exec chmod +x {} \; \
+    && chmod +x /var/www/html/vendor/drush/drush/drush
 
 # Apache configuration
 RUN echo '<VirtualHost *:80>\n\
