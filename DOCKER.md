@@ -1,106 +1,87 @@
-# Docker Compose Deployment
+# Deployment
 
-This project uses Docker Compose to manage the Drupal application and MariaDB database containers.
+This project runs Drupal 11 in Docker on a self-hosted homelab server. Deploys are
+automated by `.github/workflows/deploy.yml`: on every push to `main`, GitHub Actions
+connects to the server over Tailscale/SSH, syncs the repo, and runs `scripts/deploy.sh`.
 
-## Prerequisites
+## How it works
 
-- Docker and Docker Compose installed on your server
-- TrueNAS share mounted at `/mnt/truenas/drupal-files`
-- `docker_net` network created: `docker network create docker_net`
+1. **Checkout & connect** — the runner joins the Tailnet and opens SSH to the homelab.
+2. **Sync code** — `rsync` copies the repo to `~/drupal-deploy` on the host. This is the
+   Docker **build context**; the code is *not* bind-mounted at runtime.
+3. **`scripts/deploy.sh`** runs on the host and, in order:
+   1. writes `.env` from the CI secrets,
+   2. **builds the image** (code + `composer install` baked in — see `Dockerfile`),
+   3. **backs up the database** to `~/drupal-backups/db-<timestamp>.sql.gz` *before* any
+      migration, aborting the deploy if the dump fails (keeps the last 10),
+   4. starts containers (`docker compose up -d` — never with `-v`, so data is preserved),
+   5. runs `drush updb` → `drush cim` → `drush cr`.
 
+Because the code is baked into the image and there is **no code volume**, a rebuilt image
+is never shadowed by stale volume contents — what you push is what runs.
 
-## Deployment
+## Persistent data (never destroyed by a deploy)
 
-The GitHub Actions workflow automatically:
-1. Builds the Docker image from the Dockerfile
-2. Creates/updates containers via `docker-compose.yml`
-3. Runs Composer install
-4. Executes Drupal updates and configuration imports
-5. Sets proper permissions
+| Data              | Location                                                        |
+|-------------------|----------------------------------------------------------------|
+| Database          | Docker volume `drupal_db_data`                                  |
+| Uploaded files    | Host bind mount `/mnt/truenas/drupal-files` (TrueNAS)          |
+| DB backups        | `~/drupal-backups/` on the host (last 10 kept)                 |
 
-## Local Development
+`docker compose down`/`up` and image rebuilds do **not** touch these. Only an explicit
+`docker compose down -v` would drop the DB volume — the deploy script never does this.
 
-To run the stack locally:
+## Configuration as code
 
-1. Copy `.env.example` to `.env` and fill in your values:
-   ```bash
-   cp .env.example .env
-   ```
+Drupal configuration (enabled modules, theme selection, CKEditor/editor settings, etc.)
+is versioned in `config/sync/` and imported on every deploy via `drush cim`.
 
-2. Start the containers:
-   ```bash
-   docker-compose up -d
-   ```
+- The sync directory is set in `web/sites/default/settings.php`:
+  `$settings['config_sync_directory'] = '../config/sync';`
+- **Export** local/live changes:  `drush config:export -y`  → commit `config/sync/`.
+- **Import** happens automatically on deploy. The deploy script **skips** import when
+  `config/sync/` has no `*.yml` (so an unseeded repo can't wipe live config).
 
-3. View logs:
-   ```bash
-   docker-compose logs -f
-   ```
+Contrib modules and their versions are managed in `composer.json` / `composer.lock`.
 
-4. Stop containers:
-   ```bash
-   docker-compose down
-   ```
+## Prerequisites (one-time, on the host)
 
-## Container Structure
+- Docker + Docker Compose.
+- TrueNAS share mounted at `/mnt/truenas/drupal-files`.
+- External network: `docker network create docker_net`.
 
-- **drupal** (`homesite`): PHP 8.2 + Apache with Drupal
-  - Port: 80
-  - Volume: `/opt/drupal` → `/var/www/html` (code)
-  - Volume: `/mnt/truenas/drupal-files` (uploaded files)
+## Environment variables (GitHub Secrets)
 
-- **db** (`drupal_db`): MariaDB 10.11
-  - Volume: `drupal_db_data` (database storage)
-  - Network: `docker_net`
+- `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_ROOT_PASSWORD`
+- `DRUPAL_HASH_SALT` — the Drupal hash salt (keep stable across deploys)
+- `HOMELAB_TAILSCALE_IP`, `HOMELAB_SSH_USER`, `HOMELAB_SSH_KEY`, `TAILSCALE_AUTHKEY`
 
-## Environment Variables
+## Local development
 
-Set these in GitHub Secrets:
-- `DB_NAME`: Database name
-- `DB_USER`: Database user
-- `DB_PASSWORD`: Database password
-- `DB_ROOT_PASSWORD`: Database root password
-- `DRUPAL_HASH_SALT`: Auto-generated and persisted in `/opt/drupal/.hash_salt`
+The project is DDEV-ready (`.ddev/`, `web/sites/default/settings.ddev.php`):
 
-## Persistent Storage
-
-- **Code**: `/opt/drupal` on host → `/var/www/html` in container (survives container recreation)
-- **Uploaded Files**: `/mnt/truenas/drupal-files` (stored on TrueNAS)
-- **Database**: Docker volume `drupal_db_data`
-- **Hash Salt**: `/opt/drupal/.hash_salt` on host
-
-## Troubleshooting
-
-### View container logs
 ```bash
-docker-compose logs drupal
-docker-compose logs db
+ddev start
+ddev drush cim -y     # import committed config
 ```
 
-### Restart containers
+Or run the production stack locally by copying `.env.example` to `.env` and
+`docker compose up -d --build`.
+
+## Common operations
+
 ```bash
-docker-compose restart
+docker compose logs -f drupal          # tail app logs
+docker exec -it homesite bash          # shell into the app container
+docker compose exec db mysql -u root -p # database shell
+
+# Restore a backup (rollback):
+gzip -dc ~/drupal-backups/db-YYYYmmdd-HHMMSS.sql.gz \
+  | docker compose exec -T db mysql -u root -p"$DB_ROOT_PASSWORD" "$DB_NAME"
 ```
 
-### Rebuild containers
-```bash
-docker-compose up -d --build
-```
+## Container structure
 
-### Access Drupal container shell
-```bash
-docker exec -it homesite bash
-```
-
-### Access database
-```bash
-docker-compose exec db mysql -u root -p
-```
-
-## Benefits
-
-✅ Infrastructure as Code - all config in version control  
-✅ Easy local development - `docker-compose up`  
-✅ Reproducible environments  
-✅ Automated deployments  
-✅ No manual Portainer configuration  
+- **drupal** (`homesite`): PHP 8.3 + Apache, code + Composer deps baked into the image.
+  Published on host port `8080` → container `80`.
+- **db** (`drupal_db`): MariaDB 10.11, data in the `drupal_db_data` volume.

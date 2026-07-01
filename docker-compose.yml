@@ -5,7 +5,8 @@ services:
       context: .
       dockerfile: Dockerfile
     volumes:
-      - drupal_code:/var/www/html
+      # Code is baked into the image (see Dockerfile) — no code volume, so rebuilt
+      # images are never shadowed by stale volume contents. Only data persists below.
       - /mnt/truenas/drupal-files:/var/www/html/web/sites/default/files
     environment:
       - IS_DOCKER_DEPLOYMENT=true
@@ -39,7 +40,6 @@ services:
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
 
 volumes:
-  drupal_code:
   drupal_db_data:
 
 networks:

@@ -1,0 +1,23 @@
+uuid: 0e17c825-9a9e-48c8-a5ce-be4eb27a59b8
+langcode: en
+status: false
+dependencies:
+  module:
+    - node
+  theme:
+    - simplesmart
+_core:
+  default_config_hash: 0gq3VPg-_UM69FCCWurLFIrrnIjC2HLKhwo9iQNtcUo
+id: simplesmart_syndicate
+theme: simplesmart
+region: header
+weight: 1
+provider: null
+plugin: node_syndicate_block
+settings:
+  id: node_syndicate_block
+  label: 'RSS feed'
+  label_display: '0'
+  provider: node
+  block_count: 10
+visibility: {  }

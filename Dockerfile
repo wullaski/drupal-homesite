@@ -32,10 +32,15 @@ WORKDIR /var/www/html
 # Copy application files
 COPY . /var/www/html
 
+# Install PHP dependencies at build time so the image is self-contained.
+# allow-plugins are already declared in composer.json, so no runtime config is needed.
+RUN composer install --no-dev --no-interaction --optimize-autoloader --no-progress
+
 # Set proper permissions
 RUN chown -R www-data:www-data /var/www/html \
     && find /var/www/html -type d -exec chmod 755 {} \; \
-    && find /var/www/html -type f -exec chmod 644 {} \;
+    && find /var/www/html -type f -exec chmod 644 {} \; \
+    && find /var/www/html/vendor/bin -type f -exec chmod 755 {} \;
 
 # Apache configuration
 RUN echo '<VirtualHost *:80>\n\

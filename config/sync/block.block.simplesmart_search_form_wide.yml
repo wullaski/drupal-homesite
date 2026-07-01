@@ -1,0 +1,23 @@
+uuid: decc6168-e2bf-46a4-ad8b-9a295597e87f
+langcode: en
+status: false
+dependencies:
+  module:
+    - search
+  theme:
+    - simplesmart
+_core:
+  default_config_hash: pbbed0hdqGDF-_QWVVTWRAwgDIotFuAvWH5mWUZu0fA
+id: simplesmart_search_form_wide
+theme: simplesmart
+region: header
+weight: 4
+provider: null
+plugin: search_form_block
+settings:
+  id: search_form_block
+  label: 'Search form (wide)'
+  label_display: '0'
+  provider: search
+  page_id: null
+visibility: {  }
