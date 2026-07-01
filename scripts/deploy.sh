@@ -92,6 +92,17 @@ echo "🧹 Pruning old backups (keeping $BACKUP_KEEP)..."
 ls -1t "$BACKUP_DIR"/db-*.sql.gz 2>/dev/null | tail -n +"$((BACKUP_KEEP + 1))" | xargs -r rm -f
 
 # --- 4. bring everything up (NO -v: DB volume + files mount are preserved) -
+# Clear any lingering containers using our fixed container_name values before
+# recreating. This avoids "container name already in use" conflicts — including
+# Docker's conflict-renamed "<hash>_homesite" leftovers from prior deploys.
+# `down` never passes -v, and `docker rm` does not remove named volumes, so the
+# DB volume and files mount are preserved.
+echo "🧹 Clearing old containers (data volumes preserved)..."
+dc down --remove-orphans || true
+for c in $(docker ps -aq --filter "name=homesite" --filter "name=drupal_db"); do
+  docker rm -f "$c" >/dev/null 2>&1 || true
+done
+
 echo "🚀 Starting containers..."
 dc up -d
 
