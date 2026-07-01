@@ -35,7 +35,9 @@ cd "$DEPLOY_DIR"
 : "${DRUPAL_HASH_SALT:?DRUPAL_HASH_SALT is required}"
 
 dc() { docker compose "$@"; }
-drush() { dc exec -T -u www-data drupal vendor/bin/drush "$@"; }
+# Run drush as www-data (so file ownership matches Apache) with a writable HOME,
+# otherwise drush cannot write its cache/config and every invocation fails.
+drush() { dc exec -T -u www-data -e HOME=/tmp drupal vendor/bin/drush "$@"; }
 
 # --- 1. write .env --------------------------------------------------------
 echo "📝 Writing .env..."
@@ -106,14 +108,31 @@ done
 echo "🚀 Starting containers..."
 dc up -d
 
-echo "⏳ Waiting for Drupal to bootstrap..."
+# The db container was just recreated above, so wait for MariaDB again.
+echo "⏳ Waiting for the database to accept connections..."
 for i in $(seq 1 30); do
-  if drush status --field=bootstrap 2>/dev/null | grep -qi 'successful'; then
-    echo "✅ Drupal bootstrapped."
+  if dc exec -T db mysqladmin ping -u root -p"${DB_ROOT_PASSWORD}" --silent 2>/dev/null; then
+    echo "✅ Database is ready."
     break
   fi
-  [ "$i" -eq 30 ] && { echo "❌ Drupal did not bootstrap in time."; dc logs --tail=50 drupal; exit 1; }
+  [ "$i" -eq 30 ] && { echo "❌ Database did not become ready in time."; dc logs --tail=50 db; exit 1; }
   sleep 2
+done
+
+# Reliable readiness probe: drush must be able to run a query against Drupal's DB.
+echo "⏳ Waiting for Drupal to reach the database..."
+for i in $(seq 1 30); do
+  if drush sql:query "SELECT 1" >/dev/null 2>&1; then
+    echo "✅ Drupal can reach the database."
+    break
+  fi
+  if [ "$i" -eq 30 ]; then
+    echo "❌ Drupal could not reach the database in time. drush status was:"
+    drush status || true
+    dc logs --tail=50 drupal
+    exit 1
+  fi
+  sleep 3
 done
 
 # --- runtime permissions: only the files mount needs fixing (baked image
