@@ -102,17 +102,22 @@ echo "🚀 Starting/updating containers (app gets the new image; DB stays up)...
 dc up -d --remove-orphans
 
 # Readiness probe: drush must bootstrap Drupal with a working DB connection.
-# `drush status` prints "Drupal bootstrap : Successful" once it's ready. Because
-# the DB is not restarted, this normally passes on the first try.
+# `drush status` prints "Drupal bootstrap : Successful" once it's ready.
+#
+# NB: we capture the output and test it with a bash match instead of piping to
+# `grep -q`. Under `set -o pipefail`, `grep -q` matches and closes the pipe,
+# drush then dies with SIGPIPE, and pipefail makes the whole pipeline report
+# failure — so the probe never detects success even though it matched.
 echo "⏳ Waiting for Drupal to bootstrap..."
 for i in $(seq 1 30); do
-  if drush status 2>/dev/null | grep -qiE 'bootstrap.*successful'; then
+  status_out="$(drush status 2>/dev/null || true)"
+  if [[ "$status_out" == *Successful* ]]; then
     echo "✅ Drupal bootstrapped."
     break
   fi
   if [ "$i" -eq 30 ]; then
     echo "❌ Drupal did not bootstrap in time. drush status was:"
-    drush status || true
+    printf '%s\n' "$status_out"
     dc logs --tail=50 drupal
     exit 1
   fi
