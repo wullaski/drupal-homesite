@@ -93,34 +93,17 @@ fi
 echo "🧹 Pruning old backups (keeping $BACKUP_KEEP)..."
 ls -1t "$BACKUP_DIR"/db-*.sql.gz 2>/dev/null | tail -n +"$((BACKUP_KEEP + 1))" | xargs -r rm -f
 
-# --- 4. bring everything up (NO -v: DB volume + files mount are preserved) -
-# Clear any lingering containers using our fixed container_name values before
-# recreating. This avoids "container name already in use" conflicts — including
-# Docker's conflict-renamed "<hash>_homesite" leftovers from prior deploys.
-# `down` never passes -v, and `docker rm` does not remove named volumes, so the
-# DB volume and files mount are preserved.
-echo "🧹 Clearing old containers (data volumes preserved)..."
-dc down --remove-orphans || true
-for c in $(docker ps -aq --filter "name=homesite" --filter "name=drupal_db"); do
-  docker rm -f "$c" >/dev/null 2>&1 || true
-done
-
-echo "🚀 Starting containers..."
-dc up -d
-
-# The db container was just recreated above, so wait for MariaDB again.
-echo "⏳ Waiting for the database to accept connections..."
-for i in $(seq 1 30); do
-  if dc exec -T db mysqladmin ping -u root -p"${DB_ROOT_PASSWORD}" --silent 2>/dev/null; then
-    echo "✅ Database is ready."
-    break
-  fi
-  [ "$i" -eq 30 ] && { echo "❌ Database did not become ready in time."; dc logs --tail=50 db; exit 1; }
-  sleep 2
-done
+# --- 4. Bring up the new app image. `up -d` recreates ONLY the containers whose
+# definition changed — i.e. the app (new image each build). The DB container is
+# NOT recreated (its image is unchanged), so MariaDB keeps running and does not
+# repeat slow InnoDB recovery on every deploy. --remove-orphans cleans up any
+# stale services. Data (DB volume + files mount) is preserved; we never use -v.
+echo "🚀 Starting/updating containers (app gets the new image; DB stays up)..."
+dc up -d --remove-orphans
 
 # Readiness probe: drush must bootstrap Drupal with a working DB connection.
-# `drush status` reports "Drupal bootstrap : Successful" once it's ready.
+# `drush status` prints "Drupal bootstrap : Successful" once it's ready. Because
+# the DB is not restarted, this normally passes on the first try.
 echo "⏳ Waiting for Drupal to bootstrap..."
 for i in $(seq 1 30); do
   if drush status 2>/dev/null | grep -qiE 'bootstrap.*successful'; then
