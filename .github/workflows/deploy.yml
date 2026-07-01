@@ -30,22 +30,24 @@ jobs:
           tailscale status
 
       # 4. Verify Tailscale connectivity and setup SSH
-      - name: Test Tailscale connectivity
+      - name: Warm up Tailscale path
         env:
           SSH_HOST: ${{ secrets.HOMELAB_TAILSCALE_IP }}
         run: |
-          echo "🔍 Testing connectivity to homelab server..."
-          echo "Target host: $SSH_HOST"
-          
-          # Test basic connectivity
-          if ping -c 3 -W 5 $SSH_HOST; then
-            echo "✅ Ping successful to $SSH_HOST"
-          else
-            echo "❌ Ping failed to $SSH_HOST"
-            echo "Available Tailscale peers:"
-            tailscale status
-            exit 1
-          fi
+          # ICMP ping is unreliable over Tailscale (NAT-traversal/relay warmup and
+          # ICMP filtering), so we don't gate on it. `tailscale ping` uses Tailscale's
+          # own protocol to actively establish the path. This step is non-fatal — the
+          # authoritative gate is the SSH check in the next step.
+          echo "🔍 Warming Tailscale path to $SSH_HOST ..."
+          for i in $(seq 1 10); do
+            if sudo tailscale ping --timeout=5s --until-direct=false "$SSH_HOST" >/dev/null 2>&1; then
+              echo "✅ Tailscale path to $SSH_HOST is up"
+              break
+            fi
+            echo "⏳ Waiting for Tailscale path ($i/10)..."
+            sleep 3
+          done
+          tailscale status
 
       - name: Setup SSH
         env:
@@ -68,16 +70,23 @@ jobs:
             echo "  UserKnownHostsFile /dev/null" >> ~/.ssh/config
           fi
           
-          echo "🧪 Testing SSH connection..."
-          if ssh -o ConnectTimeout=10 -o BatchMode=yes $SSH_USER@$SSH_HOST 'echo "SSH connection successful"'; then
-            echo "✅ SSH connection test passed"
-          else
-            echo "❌ SSH connection test failed"
+          echo "🧪 Testing SSH connection (with retries for tunnel warmup)..."
+          ssh_ok=false
+          for i in $(seq 1 10); do
+            if ssh -o ConnectTimeout=10 -o BatchMode=yes $SSH_USER@$SSH_HOST 'echo "SSH connection successful"'; then
+              ssh_ok=true
+              break
+            fi
+            echo "⏳ SSH not ready yet ($i/10), retrying in 3s..."
+            sleep 3
+          done
+          if [ "$ssh_ok" != true ]; then
+            echo "❌ SSH connection test failed after retries"
             echo "SSH config:"
             cat ~/.ssh/config || echo "No SSH config found"
             exit 1
           fi
-          
+
           echo "✅ SSH key setup complete"
 
       # 5. Copy code to host
