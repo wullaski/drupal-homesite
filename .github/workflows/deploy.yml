@@ -29,26 +29,9 @@ jobs:
           sudo tailscale up --authkey=${TAILSCALE_AUTHKEY} --hostname=github-runner --timeout=30s
           tailscale status
 
-      # 4. Verify Tailscale connectivity and setup SSH
-      - name: Warm up Tailscale path
-        env:
-          SSH_HOST: ${{ secrets.HOMELAB_TAILSCALE_IP }}
-        run: |
-          # ICMP ping is unreliable over Tailscale (NAT-traversal/relay warmup and
-          # ICMP filtering), so we don't gate on it. `tailscale ping` uses Tailscale's
-          # own protocol to actively establish the path. This step is non-fatal — the
-          # authoritative gate is the SSH check in the next step.
-          echo "🔍 Warming Tailscale path to $SSH_HOST ..."
-          for i in $(seq 1 10); do
-            if sudo tailscale ping --timeout=5s --until-direct=false "$SSH_HOST" >/dev/null 2>&1; then
-              echo "✅ Tailscale path to $SSH_HOST is up"
-              break
-            fi
-            echo "⏳ Waiting for Tailscale path ($i/10)..."
-            sleep 3
-          done
-          tailscale status
-
+      # 4. Set up SSH and wait for the Tailscale tunnel to become usable.
+      #    We don't gate on ICMP ping (unreliable over Tailscale); SSH is the only
+      #    thing the deploy needs, so the SSH retry loop below is the single gate.
       - name: Setup SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.HOMELAB_SSH_KEY }}
@@ -70,15 +53,15 @@ jobs:
             echo "  UserKnownHostsFile /dev/null" >> ~/.ssh/config
           fi
           
-          echo "🧪 Testing SSH connection (with retries for tunnel warmup)..."
+          echo "🧪 Testing SSH connection (retries while the tunnel warms up)..."
           ssh_ok=false
-          for i in $(seq 1 10); do
+          for i in $(seq 1 12); do
             if ssh -o ConnectTimeout=10 -o BatchMode=yes $SSH_USER@$SSH_HOST 'echo "SSH connection successful"'; then
               ssh_ok=true
               break
             fi
-            echo "⏳ SSH not ready yet ($i/10), retrying in 3s..."
-            sleep 3
+            echo "⏳ SSH not ready yet ($i/12), retrying in 5s..."
+            sleep 5
           done
           if [ "$ssh_ok" != true ]; then
             echo "❌ SSH connection test failed after retries"
