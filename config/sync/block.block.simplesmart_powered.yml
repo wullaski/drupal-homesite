@@ -1,4 +1,4 @@
-uuid: c0037256-925a-4eab-b4cd-a5cb608f63f7
+uuid: 5313c46c-c148-473d-8526-2881923f38f5
 langcode: en
 status: false
 dependencies:
@@ -11,7 +11,7 @@ _core:
 id: simplesmart_powered
 theme: simplesmart
 region: header
-weight: 3
+weight: 0
 provider: null
 plugin: system_powered_by_block
 settings:

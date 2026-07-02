@@ -9,5 +9,5 @@ fetch:
   timeout: 30
 notification:
   emails:
-    - wullaski@proton.me
+    - Wullaski@proton.me
   threshold: all

@@ -1,4 +1,4 @@
-uuid: 86b8fcf3-3a84-4547-9bfe-d12454960346
+uuid: 0e17c825-9a9e-48c8-a5ce-be4eb27a59b8
 langcode: en
 status: false
 dependencies:
@@ -11,7 +11,7 @@ _core:
 id: simplesmart_syndicate
 theme: simplesmart
 region: header
-weight: 4
+weight: 1
 provider: null
 plugin: node_syndicate_block
 settings:

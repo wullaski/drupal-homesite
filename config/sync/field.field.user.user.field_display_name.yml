@@ -1,17 +1,17 @@
-uuid: 840a7fa9-37ab-4239-8c7f-1074f3da4cd5
+uuid: a4d51a45-00e8-427c-af7b-497c101997dc
 langcode: en
 status: true
 dependencies:
   config:
-    - field.storage.user.field_name
+    - field.storage.user.field_display_name
   module:
     - user
-id: user.user.field_name
-field_name: field_name
+id: user.user.field_display_name
+field_name: field_display_name
 entity_type: user
 bundle: user
-label: Name
-description: 'This will show up anywhere you author things'
+label: 'Display Name'
+description: ''
 required: false
 translatable: false
 default_value: {  }

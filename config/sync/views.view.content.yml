@@ -1,4 +1,4 @@
-uuid: bc7ee9c6-912a-48eb-9ea0-9398d6d753b2
+uuid: c3eb13d7-80a7-4567-ae06-c71687dfbb72
 langcode: en
 status: true
 dependencies:
@@ -377,8 +377,6 @@ display:
             multiple: false
             remember_roles:
               authenticated: authenticated
-              anonymous: '0'
-              administrator: '0'
           is_grouped: false
           group_info:
             label: ''
@@ -419,8 +417,6 @@ display:
             multiple: false
             remember_roles:
               authenticated: authenticated
-              anonymous: '0'
-              administrator: '0'
             reduce: false
           is_grouped: false
           group_info:
@@ -510,8 +506,6 @@ display:
             multiple: false
             remember_roles:
               authenticated: authenticated
-              anonymous: '0'
-              administrator: '0'
             reduce: false
           is_grouped: false
           group_info:

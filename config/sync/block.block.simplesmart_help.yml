@@ -1,4 +1,4 @@
-uuid: 86528c6a-a9b7-4070-9321-f18199121694
+uuid: e85db0c0-9b75-4501-a8e9-ff573f0c7ba3
 langcode: en
 status: false
 dependencies:
@@ -11,7 +11,7 @@ _core:
 id: simplesmart_help
 theme: simplesmart
 region: header
-weight: 2
+weight: -1
 provider: null
 plugin: help_block
 settings:
