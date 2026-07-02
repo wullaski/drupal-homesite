@@ -1,9 +1,9 @@
 _core:
   default_config_hash: ijfbzDTN4CbE7Sr-6ubWzy_t1vH4OtU1doNCLssVz-4
 langcode: en
-uuid: f60c1775-753f-4932-851a-b377ae7c91f6
+uuid: 58e4f5e5-b886-492f-8565-d8cfd5a5f935
 name: homesite
-mail: Wullaski@proton.me
+mail: wullaski@proton.me
 slogan: ''
 page:
   403: ''

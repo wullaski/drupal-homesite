@@ -17,9 +17,11 @@
     "require": {
         "composer/installers": "^2.3",
         "drupal/admin_toolbar": "^3.5",
+        "drupal/ckeditor5_markdown_editor": "^1.0@beta",
         "drupal/core-composer-scaffold": "^11.1",
         "drupal/core-project-message": "^11.1",
         "drupal/core-recommended": "^11.1",
+        "drupal/realname": "^2.0",
         "drush/drush": "^13.3"
     },
     "conflict": {

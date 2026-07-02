@@ -1,4 +1,4 @@
-uuid: 4f984b03-44fa-4a8b-8581-43fca3550f34
+uuid: ac94e57c-0883-4538-af96-b76e481bc56b
 langcode: en
 status: true
 dependencies:
@@ -9,7 +9,7 @@ _core:
 id: simplesmart_primary_admin_actions
 theme: simplesmart
 region: header
-weight: -7
+weight: -8
 provider: null
 plugin: local_actions_block
 settings:

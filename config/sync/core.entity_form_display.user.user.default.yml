@@ -1,8 +1,9 @@
-uuid: ef94181a-bf2f-4f63-b32c-9fe752e15a59
+uuid: e21eb47c-1502-4e01-a896-768e87fc8da6
 langcode: en
 status: true
 dependencies:
   config:
+    - field.field.user.user.field_name
     - field.field.user.user.user_picture
     - image.style.thumbnail
   module:
@@ -21,6 +22,14 @@ content:
   contact:
     weight: 5
     region: content
+  field_name:
+    type: string_textfield
+    weight: 7
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
   language:
     weight: 0
     region: content

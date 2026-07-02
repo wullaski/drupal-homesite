@@ -1,4 +1,4 @@
-uuid: 27ef8f7d-1193-411b-ba34-cbc7d865419e
+uuid: 15b913c5-d79d-4e88-87cb-224173b61548
 langcode: en
 status: true
 dependencies:
@@ -11,7 +11,7 @@ _core:
 id: simplesmart_messages
 theme: simplesmart
 region: header
-weight: -6
+weight: -7
 provider: null
 plugin: system_messages_block
 settings:

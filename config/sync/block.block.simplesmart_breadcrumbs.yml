@@ -1,4 +1,4 @@
-uuid: 3ec56130-c753-481f-a472-9f831d2f1532
+uuid: 00c89214-1548-4fca-9b4f-bdbe7d212f86
 langcode: en
 status: false
 dependencies:
@@ -11,7 +11,7 @@ _core:
 id: simplesmart_breadcrumbs
 theme: simplesmart
 region: header
-weight: -2
+weight: 1
 provider: null
 plugin: system_breadcrumb_block
 settings:

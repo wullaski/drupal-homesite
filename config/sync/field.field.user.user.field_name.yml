@@ -1,0 +1,20 @@
+uuid: 840a7fa9-37ab-4239-8c7f-1074f3da4cd5
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.user.field_name
+  module:
+    - user
+id: user.user.field_name
+field_name: field_name
+entity_type: user
+bundle: user
+label: Name
+description: 'This will show up anywhere you author things'
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string
